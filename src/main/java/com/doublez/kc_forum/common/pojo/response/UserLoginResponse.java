@@ -4,6 +4,6 @@ import lombok.Data;
 
 @Data
 public class UserLoginResponse {
-    private String token;
-    private Integer userId;
+    private String Authorization;
+    private Long userId;
 }

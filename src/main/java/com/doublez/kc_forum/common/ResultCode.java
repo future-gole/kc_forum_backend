@@ -1,7 +1,6 @@
 package com.doublez.kc_forum.common;
 
 import lombok.AllArgsConstructor;
-import lombok.Data;
 import lombok.Getter;
 
 @AllArgsConstructor
@@ -23,8 +22,8 @@ public enum ResultCode {
     ERROR_IS_NULL (2001, "IS NULL.");
 
     //状态码
-    int  code;
-    String message;
+    final int  code;
+    final String message;
 
     @Override
     public String toString() {

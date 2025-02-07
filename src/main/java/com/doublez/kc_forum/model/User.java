@@ -2,14 +2,16 @@ package com.doublez.kc_forum.model;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 import org.springframework.stereotype.Component;
 
-import java.util.Date;
+import java.time.LocalDateTime;
+
 
 @Component
 @Data
-public class UserInfo {
+public class User {
     /**
      * CREATE TABLE user (
      *                         id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -29,8 +31,9 @@ public class UserInfo {
      * ) COMMENT='用户信息表';
      */
     @TableId(value = "id",type = IdType.AUTO)
-    private Integer id;
+    private Long id;
     private String userName;
+    @JsonIgnore
     private String password;
     private String nickName;
     private String phone;
@@ -40,7 +43,8 @@ public class UserInfo {
     private Integer articleCount;
     private String remark;
     private Integer state;
+    @JsonIgnore
     private Integer deleteState;
-    private Date createTime;
-    private Date updateTime;
+    private LocalDateTime createTime;
+    private LocalDateTime updateTime;
 }

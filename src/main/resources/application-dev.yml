@@ -6,6 +6,10 @@ spring:
     username: root
     password: 161011zz
     driver-class-name: com.mysql.cj.jdbc.Driver
+  jackson:
+    date-format: yyyy-mm-dd HH:mm:ss #格式化日期
+    default-property-inclusion: non_null #为null的时候不格式化
+
 server:
   port: 58080
 mybatis-plus:

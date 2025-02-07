@@ -8,13 +8,11 @@ import com.doublez.kc_forum.common.pojo.request.UserLoginRequest;
 import com.doublez.kc_forum.common.pojo.response.UserLoginResponse;
 import com.doublez.kc_forum.common.utiles.JwtUtil;
 import com.doublez.kc_forum.common.utiles.SecurityUtil;
-import com.doublez.kc_forum.mapper.UserInfoMapper;
-import com.doublez.kc_forum.model.UserInfo;
+import com.doublez.kc_forum.mapper.UserMapper;
+import com.doublez.kc_forum.model.User;
 import com.doublez.kc_forum.service.IUserService;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.validator.constraints.Length;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -25,23 +23,23 @@ import java.util.Map;
 public class UserServiceImpl implements IUserService {
 
     @Autowired
-    private UserInfoMapper userInfoMapper;
+    private UserMapper userMapper;
 
     @Override
-    public UserInfo selectUserInfoByUserName(String userName) {
-        UserInfo userInfo = userInfoMapper.selectOne(new LambdaQueryWrapper<UserInfo>().eq(UserInfo::getUserName, userName));
+    public User selectUserInfoByUserName(String userName) {
+        User user = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getUserName, userName));
 
-        if (userInfo == null) {
+        if (user == null) {
             throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
         }
-        return userInfo;
+        return user;
     }
 
     @Override
-    public Integer createNormalUser(UserInfo userInfo) {
+    public Integer createNormalUser(User user) {
         //非空校验
-        if (userInfo == null || userInfo.getUserName() == null
-                || userInfo.getPassword() == null || userInfo.getNickName() == null) {
+        if (user == null || user.getUserName() == null
+                || user.getPassword() == null || user.getNickName() == null) {
             //打印日志
             log.warn(ResultCode.FAILED_USER_NOT_EXISTS.toString());
             //抛异常
@@ -54,7 +52,7 @@ public class UserServiceImpl implements IUserService {
         //TODO。。。
         int result = 0;
         try {
-            result = userInfoMapper.insert(userInfo);
+            result = userMapper.insert(user);
         } catch (Exception e) {
             throw new ApplicationException(Result.failed(ResultCode.FAILED_CREATE));
         }
@@ -66,34 +64,46 @@ public class UserServiceImpl implements IUserService {
             throw new ApplicationException(Result.failed(ResultCode.FAILED_CREATE));
         }
         //打印日志
-        log.info("新增用户成功,username:" + userInfo.getUserName());
+        log.info("新增用户成功,username:" + user.getUserName());
         return result;
     }
 
     @Override
     public UserLoginResponse login(UserLoginRequest loginRequest) {
         //判断用户是否存在,查询信息
-        UserInfo userInfo = userInfoMapper.selectOne(new LambdaQueryWrapper<UserInfo>()
-                .eq(UserInfo::getUserName, loginRequest.getUserName())
-                .eq(UserInfo::getDeleteState,0));
+        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .eq(User::getUserName, loginRequest.getUserName())
+                .eq(User::getDeleteState,0));
         //用户不存在
-        if(userInfo == null){
+        if(user == null){
             throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
         }
         //用户密码错误
-        if(!SecurityUtil.checkPassword(loginRequest.getPassword(), userInfo.getPassword())){
+        if(!SecurityUtil.checkPassword(loginRequest.getPassword(), user.getPassword())){
             throw new ApplicationException(Result.failed(ResultCode.FAILED_LOGIN));
         }
         //密码正确
         UserLoginResponse loginResponse = new UserLoginResponse();
-        loginResponse.setUserId(userInfo.getId());
+        loginResponse.setUserId(user.getId());
         //放入载荷
         Map<String,Object> map = new HashMap<>();
         map.put("userName",loginRequest.getUserName());
-        map.put("id",userInfo.getId());
-        loginResponse.setToken(JwtUtil.getToken(map));
+        map.put("id", user.getId());
+        loginResponse.setAuthorization(JwtUtil.getToken(map));
         return loginResponse;
 
+    }
+
+    @Override
+    public User selectUserInfoById(Long id) {
+        //判断用户是否存在
+        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .eq(User::getId, id).eq(User::getDeleteState,0));
+        //不存在
+        if (user == null) {
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
+        }
+        return user;
     }
 
 

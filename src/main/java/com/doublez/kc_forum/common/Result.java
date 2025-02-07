@@ -1,5 +1,6 @@
 package com.doublez.kc_forum.common;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -8,8 +9,11 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Data
 public class Result<T> {
+    @JsonInclude(JsonInclude.Include.ALWAYS)//总是参与序列化
     private int code;
+    @JsonInclude(JsonInclude.Include.ALWAYS)//总是参与序列化
     private String message;
+    @JsonInclude(JsonInclude.Include.ALWAYS)//总是参与序列化
     private T data;
 
     public Result(int code, String message) {
