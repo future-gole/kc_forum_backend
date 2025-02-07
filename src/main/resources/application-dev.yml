@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: kc_forum
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/kc_forum? characterEncoding=utf8&useSSL=false
+    username: root
+    password: 161011zz
+    driver-class-name: com.mysql.cj.jdbc.Driver
+server:
+  port: 58080
+mybatis-plus:
+  configuration: # 配置打印 MyBatis⽇志
+    map-underscore-to-camel-case: true #格式转化
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+logging:
+  pattern:
+    dateformat: yyyy-MM-dd HH:mm:ss
+  level:
+    root: info #日志默认级别
+    com.doublez.kc_forum: debug #指定包下的日志级别
+  file:
+    path: E:/log/kc_forum #日志保存路径
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    enabled: true
+  packages-to-scan: com.doublez.springblog.controller
