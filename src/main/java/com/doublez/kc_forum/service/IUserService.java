@@ -4,6 +4,9 @@ import com.doublez.kc_forum.common.pojo.request.UserLoginRequest;
 import com.doublez.kc_forum.common.pojo.response.UserLoginResponse;
 import com.doublez.kc_forum.model.User;
 
+import java.util.List;
+import java.util.Map;
+
 public interface IUserService {
 
     public User selectUserInfoByUserName(String userName);
@@ -19,4 +22,11 @@ public interface IUserService {
      * @param id
      */
     public void updateOneArticleCountById(Long id);
+
+    /**
+     * 批量提取用户id
+     * @param userIds
+     * @return Map<Long, User>
+     */
+    Map<Long, User> selectUserInfoByIds(List<Long> userIds);
 }

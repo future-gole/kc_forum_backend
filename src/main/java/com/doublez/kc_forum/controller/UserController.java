@@ -14,6 +14,7 @@ import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -42,7 +43,11 @@ public class UserController {
         //密码加密
         registerRequest.setPassword(SecurityUtil.encrypt(registerRequest.getPassword()));
         //类型转化
-        BeanUtils.copyProperties(registerRequest, user);
+        try {
+            BeanUtils.copyProperties(registerRequest, user);
+        } catch (BeansException e) {
+            log.warn(ResultCode.ERROR_TYPE_CHANGE.toString());
+        }
 
         userService.createNormalUser(user);
         //返回成功
@@ -62,7 +67,7 @@ public class UserController {
      * @param id
      * @return
      */
-    @PostMapping("/info")
+    @GetMapping("/info")
     public User getUserInfo(HttpServletRequest request, @RequestParam(value = "id", required = false) Long id) {
         //如果id为空，获取当前用户信息
         if (id == null) {

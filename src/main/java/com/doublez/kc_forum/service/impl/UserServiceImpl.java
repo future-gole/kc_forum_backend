@@ -15,9 +15,12 @@ import com.doublez.kc_forum.service.IUserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -36,6 +39,7 @@ public class UserServiceImpl implements IUserService {
         return user;
     }
 
+    @Transactional
     @Override
     public Integer createNormalUser(User user) {
         //非空校验
@@ -101,6 +105,7 @@ public class UserServiceImpl implements IUserService {
         if (user == null) {
             throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
         }
+        log.info("查询用户成功");
         return user;
     }
 
@@ -120,11 +125,22 @@ public class UserServiceImpl implements IUserService {
                 .eq(User::getState,0)//判断是否被禁言
                 .eq(User::getDeleteState, 0)
         );
-        if (rows == 0) {
+        if (rows != 1) {
             // 可能原因：用户不存在、已删除或计数未变化
             throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
         }
         log.info("用户：文章数量+1");
+    }
+
+    /**
+     * 批量提取用户id
+     * @param userIds
+     * @return Map<Long, User>
+     */
+    public Map<Long, User> selectUserInfoByIds(List<Long> userIds) {
+        // 3. 批量查询 User 信息
+        return userMapper.selectBatchIds(userIds).stream()
+                .collect(Collectors.toMap(User::getId, user -> user));
     }
 
 }

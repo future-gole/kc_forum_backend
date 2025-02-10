@@ -4,11 +4,13 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import lombok.Data;
 import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 
 //不需要加@Component，用到的时候需要创建一个新的对象而不是注入！！！
 @Data
+@Repository
 public class Article {
     /**
      *                            id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -41,5 +43,4 @@ public class Article {
     private Byte deleteState;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
-
 }

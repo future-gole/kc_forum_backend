@@ -24,6 +24,7 @@ logging:
     com.doublez.kc_forum: debug #指定包下的日志级别
   file:
     path: E:/log/kc_forum #日志保存路径
+
 springdoc:
   api-docs:
     path: /api-docs

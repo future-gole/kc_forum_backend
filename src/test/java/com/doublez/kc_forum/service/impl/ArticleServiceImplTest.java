@@ -1,9 +1,12 @@
 package com.doublez.kc_forum.service.impl;
 
+import com.doublez.kc_forum.common.pojo.response.ViewArticlesResponse;
 import com.doublez.kc_forum.model.Article;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -21,5 +24,16 @@ class ArticleServiceImplTest {
         article.setBoardId(1L);
         articleService.createArtical(article);
         System.out.println("更新成功");
+    }
+
+    @Test
+    void getAllArticlesByBoardId() {
+        List<ViewArticlesResponse> articles = articleService.getAllArticlesByBoardId(1L);
+        System.out.println(articles.toString());
+    }
+
+    @Test
+    void getUserId() {
+        System.out.println(articleService.getUserId(1L));
     }
 }

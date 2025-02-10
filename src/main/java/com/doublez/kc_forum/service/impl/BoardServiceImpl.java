@@ -48,6 +48,10 @@ public class BoardServiceImpl implements IBoardService {
                 .eq(Board::getDeleteState,0).eq(Board::getState,0));
     }
 
+    /**
+     * 更新板块数量
+     * @param id
+     */
     @Override
     public void updateOneArticleCountById(Long id) {
         if(id == null || id <= 0 ) {
