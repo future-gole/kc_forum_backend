@@ -27,9 +27,6 @@ public class UserController {
     @Autowired
     private UserServiceImpl userService;
 
-    @Autowired
-    private User user;
-
     @PostMapping("/register")
     public Result register(@RequestBody @Validated
                         RegisterRequest registerRequest) {
@@ -40,6 +37,8 @@ public class UserController {
             return Result.failed(ResultCode.FAILED_TWO_PWD_NOT_SAME);
         }
 
+        //!!!!不能注入，要创建新的对象
+        User user = new User();
         //密码加密
         registerRequest.setPassword(SecurityUtil.encrypt(registerRequest.getPassword()));
         //类型转化
@@ -67,27 +66,7 @@ public class UserController {
     public User getUserInfo(HttpServletRequest request, @RequestParam(value = "id", required = false) Long id) {
         //如果id为空，获取当前用户信息
         if (id == null) {
-            // 1. 从请求头中获取 Authorization Header
-            String authorizationHeader = request.getHeader("Authorization");
-            String token = authorizationHeader.substring(7);
-
-            // 2. 验证 JWT 并解析 Token (Interceptor 已经验证过 Token，这里只需要解析)
-            Claims claims = JwtUtil.parseToken(token);
-
-            // 3. 从 claims 中获取用户 ID
-            Long userId = null;
-            if (claims != null && claims.containsKey("id")) {
-                try {
-                    userId = Long.valueOf(claims.get("id").toString());
-                } catch (NumberFormatException e) {
-                    // 处理 "id" 不是 Integer 类型的情况
-                    throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
-                }
-            }
-            if (userId == null) {
-                // 处理用户 ID 为空的情况
-                throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
-            }
+            Long userId = JwtUtil.getUserId(request);
             // 4. 根据用户 ID 查询用户信息
             return userService.selectUserInfoById(userId);
         } else {

@@ -16,7 +16,7 @@ public enum ResultCode {
     AILED_USER_EXISTS (1101, "⽤⼾已存在"),
     FAILED_USER_NOT_EXISTS (1102, "⽤⼾不存在"),
     FAILED_LOGIN (1103, "⽤⼾名或密码错误"),
-    FAILED_USER_BANNED (1104, "您已被禁⾔, 请联系管理员, 并重新登录."),
+    FAILED_USER_BANNED (1104, "您已被禁⾔, 请联系管理员."),
     FAILED_TWO_PWD_NOT_SAME (1105, "两次输⼊的密码不⼀致"),
     ERROR_SERVICES (2000, "服务器内部错误"),
     ERROR_IS_NULL (2001, "IS NULL.");

@@ -13,4 +13,10 @@ public interface IUserService {
     public UserLoginResponse login(UserLoginRequest loginRequest);
 
     public User selectUserInfoById(Long id);
+
+    /**
+     * 更新用户发帖数目
+     * @param id
+     */
+    public void updateOneArticleCountById(Long id);
 }

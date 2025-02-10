@@ -9,4 +9,12 @@ public interface IBoardService {
     List<Board> selectBoardsByNum(int num);
     //查询所有正常的板块
     List<Board> selectAllBoards();
+
+    /**
+     * 更新板块发帖数目
+     * @param id
+     */
+    void updateOneArticleCountById(Long id);
+
+    Board selectOneBoardById(Long id);
 }

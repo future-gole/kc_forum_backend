@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 
 
-@Component
+//不需要加@Component，用到的时候需要创建一个新的对象而不是注入！！！
 @Data
 public class User {
     /**
