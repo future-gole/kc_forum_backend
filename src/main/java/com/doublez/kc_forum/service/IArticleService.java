@@ -38,5 +38,12 @@ public interface IArticleService {
      */
     ArticleDetailResponse getArticleDetailById(Long userId, Long id);
 
+    /**
+     * 更新帖子
+     * @param updateArticleRequest
+     * @return
+     */
     boolean updateArticle(UpdateArticleRequest updateArticleRequest);
+
+    boolean deleteArticle(Long id);
 }

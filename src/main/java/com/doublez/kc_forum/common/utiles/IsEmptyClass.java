@@ -9,6 +9,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class IsEmptyClass {
 
+    /**
+     * 判断资源是否为空
+     * @param source
+     * @param resultCode
+     * @param id
+     * @param <T>
+     */
     public static<T> void Empty(T source,ResultCode resultCode,Long id)  {
         if(source == null){
             log.error("{} 资源id:{}", resultCode.getMessage(), id);

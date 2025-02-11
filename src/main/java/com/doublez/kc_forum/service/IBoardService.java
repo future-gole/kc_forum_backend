@@ -14,7 +14,7 @@ public interface IBoardService {
      * 更新板块发帖数目
      * @param id
      */
-    void updateOneArticleCountById(Long id);
+    void updateOneArticleCountById(Long id, String sql);
 
     Board selectOneBoardById(Long id);
 }

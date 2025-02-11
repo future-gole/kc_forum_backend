@@ -25,8 +25,9 @@ public enum ResultCode {
     ERROR_IS_NULL (2001, "IS NULL."),
 
     FAILED_ARTICLE_NOT_EXISTS(3001,"帖子不存在"),
-    FAILED_UPDATE_ARTICLE(3001,"帖子更新失败"),
-    FAILED_ARTICLE_BANNED(3002,"帖子被禁言");
+    FAILED_UPDATE_ARTICLE(3002,"帖子更新失败"),
+    FAILED_ARTICLE_BANNED(3003,"帖子被禁言"),
+    FAILED_ARTICLE_DELETE(3004,"帖子删除失败");
 
 
     //状态码

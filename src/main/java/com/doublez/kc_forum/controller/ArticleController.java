@@ -7,6 +7,7 @@ import com.doublez.kc_forum.common.pojo.request.ArticleAddRequest;
 import com.doublez.kc_forum.common.pojo.request.UpdateArticleRequest;
 import com.doublez.kc_forum.common.pojo.response.ArticleDetailResponse;
 import com.doublez.kc_forum.common.pojo.response.ViewArticlesResponse;
+import com.doublez.kc_forum.common.utiles.AuthUtils;
 import com.doublez.kc_forum.common.utiles.JwtUtil;
 import com.doublez.kc_forum.model.Article;
 import com.doublez.kc_forum.model.Board;
@@ -15,6 +16,7 @@ import com.doublez.kc_forum.service.impl.ArticleServiceImpl;
 import com.doublez.kc_forum.service.impl.BoardServiceImpl;
 import com.doublez.kc_forum.service.impl.UserServiceImpl;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.springframework.beans.BeanUtils;
@@ -44,11 +46,8 @@ public class ArticleController {
         //需要判断用户是否被禁言
         Long userId = JwtUtil.getUserId(request);
         User user = userService.selectUserInfoById(userId);
-        //被禁用
-        if(user.getState() == 1){
-            log.warn("该用户已被禁言，id：{}",userId);
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_BANNED));
-        }
+        AuthUtils.userBannedChecker(user);;
+
         //需要判断板块是否正常
         Board board = boardService.selectOneBoardById(articleAddRequest.getBoardId());
         //板块不存在或者板块被禁言
@@ -56,7 +55,7 @@ public class ArticleController {
             log.warn("板块不存在或者已经被禁言");
             throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        //创建新的对象而不是注入！！！
+        //创建新的对象而不是注入！！！,要不然会导致插入一次之后id就不会变了
         Article article = new Article();
         //类型转化
         BeanUtils.copyProperties(articleAddRequest,article);
@@ -80,13 +79,12 @@ public class ArticleController {
         }else if(boardId < 0){
             throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        List<ViewArticlesResponse> viewArticlesResponses = articleService.getAllArticlesByBoardId(boardId);
 
-        return viewArticlesResponses;
+        return articleService.getAllArticlesByBoardId(boardId);
     }
 
     /**
-     * 根据帖子id查询1帖子详情
+     * 根据帖子id查询帖子详情
      * @param articleId 文章id
      * @return ArticleDetailResponse
      */
@@ -99,6 +97,12 @@ public class ArticleController {
         throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
     }
 
+    /**
+     * 更新帖子
+     * @param request 获取当前用户id
+     * @param updateArticleRequest 获取需要更新的数据
+     * @return 成功返回true
+     */
     @PostMapping("/updateArticle")
     public boolean UpdateArticle(HttpServletRequest request, @RequestBody @Validated UpdateArticleRequest updateArticleRequest) {
         //简单判断
@@ -107,18 +111,25 @@ public class ArticleController {
         }
         //鉴权
         Long userId = JwtUtil.getUserId(request);
-        //无权限
-        if(!userId.equals(articleService.getUserId(updateArticleRequest.getId()))){
-            log.warn(ResultCode.FAILED_UNAUTHORIZED.toString()+"id: {}",userId);
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_UNAUTHORIZED));
-        }
+        AuthUtils.userPermissionChecker(userId,updateArticleRequest.getId(),articleService::getUserId);
         //被禁言
         User user = userService.selectUserInfoById(userId);
-        if(user.getState() == 1 || user.getDeleteState() == 1){
-            log.warn(ResultCode.FAILED_USER_BANNED.toString());
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_BANNED));
-        }
+        AuthUtils.userBannedChecker(user);
+        //查询
         return articleService.updateArticle(updateArticleRequest);
 
     }
+
+    @PostMapping("/deleteArticle")
+    public boolean DeleteArticle(HttpServletRequest request, @NotNull Long articleId) {
+        if(articleId == null || articleId <= 0){
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        Long userId = JwtUtil.getUserId(request);
+        //鉴权
+        AuthUtils.userPermissionChecker(userId,articleId,articleService::getUserId);
+
+        return articleService.deleteArticle(articleId);
+    }
+
 }

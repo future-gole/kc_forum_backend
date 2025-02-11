@@ -110,26 +110,27 @@ public class UserServiceImpl implements IUserService {
     }
 
     /**
-     * 根据id添加该用户文章数量+1
+     * 根据id修改该用户文章数量
      * @param id
      */
     @Override
-    public void updateOneArticleCountById(Long id) {
+    public void updateOneArticleCountById(Long id,String sql) {
         if(id == null || id <= 0 ) {
             throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         // 直接更新，利用数据库原子操作避免并发问题
         int rows = userMapper.update( new LambdaUpdateWrapper<User>()
-                .setSql("article_count = article_count + 1") // 确保字段名与数据库一致
+                .setSql(sql) // 确保字段名与数据库一致
                 .eq(User::getId, id)
                 .eq(User::getState,0)//判断是否被禁言
                 .eq(User::getDeleteState, 0)
         );
         if (rows != 1) {
             // 可能原因：用户不存在、已删除或计数未变化
+            log.warn("更新用户发帖数量失败, userId: {}", id);
             throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
         }
-        log.info("用户：文章数量+1");
+        log.info("用户：文章数量更新");
     }
 
     /**

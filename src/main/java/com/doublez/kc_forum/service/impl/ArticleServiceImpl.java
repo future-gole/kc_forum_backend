@@ -72,20 +72,19 @@ public class ArticleServiceImpl implements IArticleService {
 
         //插入article
         int articleRow  = articleMapper.insert(article);
-        if (articleRow == 0){
+        if (articleRow != 1){
             log.warn(ResultCode.FAILED_CREATE.toString());
             throw new ApplicationException(Result.failed(ResultCode.FAILED_CREATE));
         }
 
         //更新用户发帖数量
-        userServiceImpl.updateOneArticleCountById(article.getUserId());
+        userServiceImpl.updateOneArticleCountById(article.getUserId(),"article_count = article_count + 1");
 
         //更新板块发帖数量
-        boardServiceImpl.updateOneArticleCountById(article.getBoardId());
+        boardServiceImpl.updateOneArticleCountById(article.getBoardId(),"article_count = article_count + 1");
 
         //打印日志
-        log.info(ResultCode.SUCCESS.toString()+article.getId()+"发帖成功"
-                +"用户id："+ article.getUserId() + "板块id: " + article.getBoardId());
+        log.info("发帖成功, 帖子id: "+article.getId() +"用户id："+ article.getUserId() + "板块id: " + article.getBoardId());
 
     }
 
@@ -174,7 +173,7 @@ public class ArticleServiceImpl implements IArticleService {
         }
 
         //访问量加1
-        if(articleMapper.update(new LambdaUpdateWrapper<Article>().setSql("visit_count = visit_count + 1")
+        if(articleMapper.update(new LambdaUpdateWrapper<Article>().set(Article::getVisitCount,article.getVisitCount()+1)
                 .eq(Article::getId,id).eq(Article::getDeleteState, 0).eq(Article::getState, 0)) != 1){
             log.error(ResultCode.ERROR_SERVICES+": 访问量新增异常");
             throw new ApplicationException(Result.failed(ResultCode.ERROR_SERVICES));
@@ -202,6 +201,41 @@ public class ArticleServiceImpl implements IArticleService {
             return true;
         }
         throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_NOT_EXISTS));
+    }
+
+    @Transactional
+    @Override
+    public boolean deleteArticle(Long id) {
+        //鉴权由controller层负责
+
+        // 先检查记录是否存在
+        Article article = articleMapper.selectById(id);
+        if (article == null) {
+            log.error("删除帖子失败, 帖子不存在, id: {}", id);
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_NOT_EXISTS));
+        }
+        if(article.getDeleteState() == 1){
+            log.error("帖子已经被删除，id：{}",id);
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_NOT_EXISTS));
+        }
+        // 执行更新操作
+        if( articleMapper.update(new LambdaUpdateWrapper<Article>()
+                .set(Article::getDeleteState, 1)
+                .eq(Article::getId, id)) != 1){
+            log.warn("删除文章失败, id: {}", id);
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_DELETE));
+        }
+
+        //更新用户发帖数量
+        userServiceImpl.updateOneArticleCountById(article.getUserId(),"article_count = article_count - 1");
+
+        //更新板块发帖数量
+        boardServiceImpl.updateOneArticleCountById(article.getBoardId(),"article_count = article_count - 1");
+
+        //打印日志
+        log.info(ResultCode.SUCCESS.toString()+article.getId()+"删帖成功"
+                +"用户id："+ article.getUserId() + "板块id: " + article.getBoardId());
+        return true;
     }
 
     // 类型转化抽取出来的通用方法
