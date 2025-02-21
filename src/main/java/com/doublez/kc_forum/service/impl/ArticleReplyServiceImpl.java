@@ -62,6 +62,13 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
         log.info("回帖成功, 回帖id: "+articleReply.getId() +" 用户id："+ articleReply.getPostUserId() + " 帖子id: " + articleReply.getArticleId());
 
     }
+    public  int updateLikeCount(Long targetId, int increment){
+        return articleReplyMapper.update(new LambdaUpdateWrapper<ArticleReply>()
+                .eq(ArticleReply::getId,targetId)
+                .eq(ArticleReply::getDeleteState,0)
+                .eq(ArticleReply::getState,0)
+                .setSql("like_count = like_count + " + increment));
+    }
 
     // 类型转化抽取出来的通用方法
     private <Source, Target> Target copyProperties(Source source, Class<Target> targetClass) {

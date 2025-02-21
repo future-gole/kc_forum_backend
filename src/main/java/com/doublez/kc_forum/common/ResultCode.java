@@ -27,8 +27,9 @@ public enum ResultCode {
     FAILED_ARTICLE_NOT_EXISTS(3001,"帖子不存在"),
     FAILED_UPDATE_ARTICLE(3002,"帖子更新失败"),
     FAILED_ARTICLE_BANNED(3003,"帖子被禁言"),
-    FAILED_ARTICLE_DELETE(3004,"帖子删除失败");
+    FAILED_ARTICLE_DELETE(3004,"帖子删除失败"),
 
+    FAILED_CHANGE_LIKE(4001,"增加/删除点赞失败");
 
     //状态码
     final int  code;

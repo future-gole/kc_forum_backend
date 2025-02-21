@@ -78,10 +78,10 @@ public class ArticleServiceImpl implements IArticleService {
         }
 
         //更新用户发帖数量
-        userServiceImpl.updateOneArticleCountById(article.getUserId(),"article_count = article_count + 1");
+        userServiceImpl.updateOneArticleCountById(article.getUserId(),1);
 
         //更新板块发帖数量
-        boardServiceImpl.updateOneArticleCountById(article.getBoardId(),"article_count = article_count + 1");
+        boardServiceImpl.updateOneArticleCountById(article.getBoardId(),1);
 
         //打印日志
         log.info("发帖成功, 帖子id: "+article.getId() +"用户id："+ article.getUserId() + "板块id: " + article.getBoardId());
@@ -227,10 +227,10 @@ public class ArticleServiceImpl implements IArticleService {
         }
 
         //更新用户发帖数量
-        userServiceImpl.updateOneArticleCountById(article.getUserId(),"article_count = article_count - 1");
+        userServiceImpl.updateOneArticleCountById(article.getUserId(),-1);
 
         //更新板块发帖数量
-        boardServiceImpl.updateOneArticleCountById(article.getBoardId(),"article_count = article_count - 1");
+        boardServiceImpl.updateOneArticleCountById(article.getBoardId(),-1);
 
         //打印日志
         log.info(ResultCode.SUCCESS.toString()+article.getId()+"删帖成功"
@@ -238,6 +238,13 @@ public class ArticleServiceImpl implements IArticleService {
         return true;
     }
 
+    public int updateLikeCount(Long targetId, int increment){
+        return articleMapper.update(new LambdaUpdateWrapper<Article>()
+                .eq(Article::getId,targetId)
+                .eq(Article::getDeleteState,0)
+                .eq(Article::getState,0)
+                .setSql("like_count = like_count + " + increment));
+    }
     // 类型转化抽取出来的通用方法
     private <Source, Target> Target copyProperties(Source source, Class<Target> targetClass) {
         try {

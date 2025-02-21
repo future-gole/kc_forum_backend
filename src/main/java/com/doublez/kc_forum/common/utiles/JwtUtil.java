@@ -33,8 +33,8 @@ public class JwtUtil {
     public static  String getToken(Map<String, Object> map) {
         return  Jwts.builder()
                 .setClaims(map)
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .setIssuedAt(new Date())//设置开始时间
+                .setExpiration(new Date(System.currentTimeMillis() + expiration))//设置过期时间
                 .signWith(key)
                 .compact();
 

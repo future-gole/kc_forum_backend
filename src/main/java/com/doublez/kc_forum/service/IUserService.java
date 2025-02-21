@@ -21,7 +21,7 @@ public interface IUserService {
      * 更新用户发帖数目
      * @param id
      */
-    public void updateOneArticleCountById(Long id,String sql);
+    public void updateOneArticleCountById(Long id,int increment);
 
     /**
      * 批量提取用户id

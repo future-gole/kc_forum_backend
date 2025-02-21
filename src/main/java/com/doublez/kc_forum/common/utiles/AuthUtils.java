@@ -20,7 +20,7 @@ import java.util.function.Function;
 public class AuthUtils {
 
     //无权限
-    public static <T> boolean userPermissionChecker(@NotNull Long userId, @NotNull Long resourceId, @NotNull Function<Long, Long> ownerIdGetter) {
+    public static  boolean userPermissionChecker(@NotNull Long userId, @NotNull Long resourceId, @NotNull Function<Long, Long> ownerIdGetter) {
         // 获取资源所有者 ID
         Long ownerId = ownerIdGetter.apply(resourceId);
 

@@ -114,13 +114,13 @@ public class UserServiceImpl implements IUserService {
      * @param id
      */
     @Override
-    public void updateOneArticleCountById(Long id,String sql) {
+    public void updateOneArticleCountById(Long id,int increment) {
         if(id == null || id <= 0 ) {
             throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         // 直接更新，利用数据库原子操作避免并发问题
         int rows = userMapper.update( new LambdaUpdateWrapper<User>()
-                .setSql(sql) // 确保字段名与数据库一致
+                .setSql("article_count = article_count + " + increment) // 确保字段名与数据库一致
                 .eq(User::getId, id)
                 .eq(User::getState,0)//判断是否被禁言
                 .eq(User::getDeleteState, 0)
