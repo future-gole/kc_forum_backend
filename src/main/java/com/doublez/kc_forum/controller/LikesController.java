@@ -36,4 +36,12 @@ public class LikesController {
         log.info("取消点赞：userId = {}, articleId = {}, targetType = {}", userId, targetId,targetType);
         likeService.unlike(userId, targetId ,targetType);
     }
+
+    @GetMapping("/checkLike")
+    public boolean checkLike(HttpServletRequest request,
+                             @RequestParam @NotNull Long targetId,
+                             @RequestParam @NotNull String targetType){
+        Long userId = JwtUtil.getUserId(request);
+        return likeService.checkLike(userId, targetId, targetType);
+    }
 }

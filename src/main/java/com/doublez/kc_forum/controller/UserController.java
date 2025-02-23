@@ -3,6 +3,7 @@ package com.doublez.kc_forum.controller;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.pojo.request.ModifyUerRequest;
 import com.doublez.kc_forum.common.pojo.request.RegisterRequest;
 import com.doublez.kc_forum.common.pojo.request.UserLoginRequest;
 import com.doublez.kc_forum.common.pojo.response.UserLoginResponse;
@@ -46,7 +47,8 @@ public class UserController {
         try {
             BeanUtils.copyProperties(registerRequest, user);
         } catch (BeansException e) {
-            log.warn(ResultCode.ERROR_TYPE_CHANGE.toString());
+            log.error(ResultCode.ERROR_TYPE_CHANGE.toString());
+            throw new ApplicationException(Result.failed(ResultCode.ERROR_TYPE_CHANGE));
         }
 
         userService.createNormalUser(user);
@@ -78,5 +80,20 @@ public class UserController {
             //查询对应用户id
             return userService.selectUserInfoById(id);
         }
+    }
+    @PostMapping("/modify")
+    public boolean  modifyInfo(HttpServletRequest request,@RequestBody @Validated ModifyUerRequest modifyUerRequest) {
+        //获取当前用户id
+        Long userId = JwtUtil.getUserId(request);
+        User user = new User();
+        //类型转化
+        try {
+            BeanUtils.copyProperties(modifyUerRequest, user);
+            user.setId(userId);
+        } catch (BeansException e) {
+            log.error(ResultCode.ERROR_TYPE_CHANGE.toString());
+            throw new ApplicationException(Result.failed(ResultCode.ERROR_TYPE_CHANGE));
+        }
+        return userService.modifyUserInfoById(user);
     }
 }

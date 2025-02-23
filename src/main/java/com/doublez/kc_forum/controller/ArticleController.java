@@ -94,7 +94,17 @@ public class ArticleController {
             Long userId = JwtUtil.getUserId(request);
             return articleService.getArticleDetailById(userId,articleId);
         }
+        log.error("传入参数有错，articleId:{}", articleId);
         throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+    }
+
+    @GetMapping("/getAllArticlesByUserId")
+    public List<ViewArticlesResponse> getAllArticlesByUserId(Long userId) {
+        if(userId == null || userId < 0){
+            log.error("参数校验失败 userId:{}", userId);
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        return articleService.getAllArticlesByUserId(userId);
     }
 
     /**

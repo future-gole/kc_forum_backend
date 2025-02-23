@@ -29,4 +29,6 @@ public interface IUserService {
      * @return Map<Long, User>
      */
     Map<Long, User> selectUserInfoByIds(List<Long> userIds);
+
+    boolean   modifyUserInfoById(User user);
 }

@@ -34,6 +34,7 @@ public class LikesServiceImpl implements ILikesService {
         return likeMapper.selectOne(new LambdaQueryWrapper<Likes>().eq(Likes::getUserId, userId)
                 .eq(Likes::getTargetId, targetId).eq(Likes::getTargetType, targetType));
     }
+    @Override
     @Transactional
     public void like(Long userId, Long targetId, String targetType) {
         // 1. 查询数据库，确认是否已点赞
@@ -57,6 +58,7 @@ public class LikesServiceImpl implements ILikesService {
         }
     }
 
+    @Override
     @Transactional
     public void unlike(Long userId, Long targetId, String targetType) {
         // 1. 查询数据库，确认是否已点赞
@@ -73,6 +75,13 @@ public class LikesServiceImpl implements ILikesService {
         if(updateLikeCount(targetId, targetType, -1) != 1){
             throw new ApplicationException(Result.failed(ResultCode.FAILED_CHANGE_LIKE));
         }
+    }
+
+    @Override
+    public boolean checkLike(Long userId, Long targetId, String targetType) {
+        // 1. 查询数据库，确认是否已点赞
+        Likes existingLike = isLikes(userId, targetId, targetType);
+        return existingLike != null;
     }
 
     private int updateLikeCount(Long targetId, String targetType, int increment) {

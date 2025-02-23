@@ -144,4 +144,28 @@ public class UserServiceImpl implements IUserService {
                 .collect(Collectors.toMap(User::getId, user -> user));
     }
 
+    @Override
+    public boolean  modifyUserInfoById(User user) {
+        if(user == null || user.getUserName() == null){
+            log.warn(ResultCode.FAILED_USER_NOT_EXISTS.toString());
+            return false;
+        }
+        //todo 用什么作为唯一校验
+        //。。。补充完整校验
+        //改进，判断有变化再改，如果都没变化就可以不用改
+        int row = userMapper.update(new LambdaUpdateWrapper<User>()
+                .set(User::getUserName,user.getUserName())
+                .set(User::getNickName, user.getNickName())
+                .set(User::getEmail,user.getEmail())
+                .set(User::getGender,user.getGender())
+                .set(User::getPhone,user.getPhone())
+                .set(User::getRemark,user.getRemark())
+                .eq(User::getId, user.getId()));
+        if(row != 1) {
+            log.error("{}: id = {}",user.getId(),ResultCode.FAILED_MODIFY_USER.getMessage());
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_MODIFY_USER));
+        }
+        return true;
+    }
+
 }

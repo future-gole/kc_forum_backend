@@ -67,8 +67,9 @@ public class GlobalExceptionHandler {
         return Result.failed(e.getMessage());
     }
 
+    //类型转化异常
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Object> handleValidationExceptions(MethodArgumentNotValidException ex) {
+    public ResponseEntity<Result<Map<String, String>>> handleValidationExceptions(MethodArgumentNotValidException ex) {
         BindingResult bindingResult = ex.getBindingResult();
         List<FieldError> fieldErrors = bindingResult.getFieldErrors();
 
@@ -76,7 +77,8 @@ public class GlobalExceptionHandler {
         for (FieldError error : fieldErrors) {
             errors.put(error.getField(), error.getDefaultMessage()); // 获取 default message
         }
-
-        return new ResponseEntity<>(errors, HttpStatus.BAD_REQUEST);
+        //用result进行包装，防止ResponseAdvice又包装一遍
+        Result<Map<String, String>> result = new Result<>(ResultCode.FAILED_PARAMS_VALIDATE.getCode(), ResultCode.FAILED_PARAMS_VALIDATE.getMessage(), errors);
+        return new ResponseEntity<>(result, HttpStatus.BAD_REQUEST);
     }
 }

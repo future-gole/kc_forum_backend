@@ -131,11 +131,11 @@ public class ArticleServiceImpl implements IArticleService {
 
         Map<Long,User> userMap = userServiceImpl.selectUserInfoByIds(userIds);
 
-        // 4. 组装数据
+        // 3. 组装数据
 
-        List<ViewArticlesResponse> ViewArticlesResponse = articles.stream().map(article -> {
+        List<ViewArticlesResponse> viewArticlesResponse = articles.stream().map(article -> {
             User user = userMap.get(article.getUserId());
-
+            //判断用户是否存在
             IsEmptyClass.Empty(user,ResultCode.FAILED_USER_NOT_EXISTS,article.getId());
 
             UserArticleResponse userArticleResponse = copyProperties(user, UserArticleResponse.class);
@@ -146,8 +146,8 @@ public class ArticleServiceImpl implements IArticleService {
             return viewArticleResponse;
         }).collect(Collectors.toList());
 
-        log.info(ResultCode.SUCCESS.getMessage()+"查询帖子成功");
-        return ViewArticlesResponse;
+        log.info("{}:查询帖子成功", ResultCode.SUCCESS.getMessage());
+        return viewArticlesResponse;
     }
 
     @Override
@@ -168,6 +168,7 @@ public class ArticleServiceImpl implements IArticleService {
 
         articleDetailResponse.setUser(userArticleResponse);
 
+        //判断是否是本人帖子，用于设置权限
         if(userId.equals(article.getUserId())){
             articleDetailResponse.setOwn(true);
         }
@@ -181,8 +182,36 @@ public class ArticleServiceImpl implements IArticleService {
         //更新返回给前端的帖子访问次数
         articleDetailResponse.setVisitCount(articleDetailResponse.getVisitCount()+1);
 
-        log.info(ResultCode.SUCCESS.toString()+"查询帖子细节成功");
+        log.info("查询帖子细节成功, articleId:{}",id);
         return articleDetailResponse;
+    }
+
+    @Override
+    public List<ViewArticlesResponse> getAllArticlesByUserId(Long userId) {
+        //根据用户id查询
+        List<Article> articles = articleMapper.selectList(new LambdaQueryWrapper<Article>()
+                .eq(Article::getUserId, userId)
+                .eq(Article::getDeleteState, 0));
+        //为空直接返回
+        if(articles == null || articles.isEmpty()){
+            return Collections.emptyList();
+        }
+        //组装数据
+        User user = userServiceImpl.selectUserInfoById(userId);
+        //判断为空
+        if(user == null){
+            log.error(ResultCode.FAILED_USER_NOT_EXISTS.toString()+"userId: ",userId);
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
+        }
+        UserArticleResponse userArticleResponse =copyProperties(user, UserArticleResponse.class);
+        List<ViewArticlesResponse> viewArticlesResponses = articles.stream().map(article -> {
+            ViewArticlesResponse viewArticlesResponse = copyProperties(article, ViewArticlesResponse.class);
+            viewArticlesResponse.setUser(userArticleResponse);
+
+            return viewArticlesResponse;
+        }).toList();
+        log.info("查询用户发布帖子成功：userId:{}",userId);
+        return viewArticlesResponses;
     }
 
     @Transactional

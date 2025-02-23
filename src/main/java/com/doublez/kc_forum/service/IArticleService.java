@@ -26,10 +26,11 @@ public interface IArticleService {
     /**
      * 通过boardid查询其board下的所以article
      * 组装成为ViewArticlesResponse返回
-     * @param id
+     * @param BoardId
      * @return  List<ViewArticlesResponse>
      */
-    List<ViewArticlesResponse> getAllArticlesByBoardId(@RequestParam(required = false)Long id);
+    List<ViewArticlesResponse> getAllArticlesByBoardId(@RequestParam(required = false)Long BoardId);
+
 
     /**
      * 根据id获取帖子详情
@@ -38,6 +39,12 @@ public interface IArticleService {
      */
     ArticleDetailResponse getArticleDetailById(Long userId, Long id);
 
+    /**
+     * 根据用户id获得其帖子详情
+     * @param userId
+     * @return
+     */
+    List<ViewArticlesResponse> getAllArticlesByUserId(Long userId);
     /**
      * 更新帖子
      * @param updateArticleRequest
