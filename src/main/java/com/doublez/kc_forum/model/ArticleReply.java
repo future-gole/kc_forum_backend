@@ -2,6 +2,7 @@ package com.doublez.kc_forum.model;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import org.springframework.stereotype.Repository;
 
@@ -37,6 +38,8 @@ public class ArticleReply {
     private Integer likeCount;
     private Byte state; // Use Byte for TINYINT
     private Byte deleteState; // Use Byte for TINYINT
+    @JsonFormat(pattern = "yyyy-mm-dd")
     private LocalDateTime createTime;
+    @JsonFormat(pattern = "yyyy-mm-dd")
     private LocalDateTime updateTime;
 }

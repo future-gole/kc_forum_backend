@@ -1,6 +1,7 @@
 package com.doublez.kc_forum.common.pojo.response;
 
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -14,6 +15,7 @@ public class ViewArticleReplyResponse {
     private Long replyUserId;//楼主下的回复⽤⼾编号，⽀持楼中楼
     private String content;
     private Integer likeCount;
+    @JsonFormat(pattern = "yyyy-mm-dd")
     private LocalDateTime createTime;
     //关联对象
     private UserArticleResponse user;

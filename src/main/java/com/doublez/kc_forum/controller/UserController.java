@@ -12,7 +12,11 @@ import com.doublez.kc_forum.common.utiles.SecurityUtil;
 import com.doublez.kc_forum.model.User;
 import com.doublez.kc_forum.service.impl.UserServiceImpl;
 import io.jsonwebtoken.Claims;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeansException;
@@ -24,12 +28,14 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/user")
 @Slf4j
+@Tag(name = "用户类",description = "用户相关api")
 public class UserController {
 
     @Autowired
     private UserServiceImpl userService;
 
     @PostMapping("/register")
+    @Operation(summary = "用户注册")
     public Result register(@RequestBody @Validated
                         RegisterRequest registerRequest) {
         log.info("用户注册：{}", registerRequest.getUserName());
@@ -57,6 +63,7 @@ public class UserController {
     }
 
     @PostMapping("/login")
+    @Operation(summary = "用户登陆")
     public UserLoginResponse login(@RequestBody @Validated
                                    UserLoginRequest userLoginRequest){
         log.info("用户登录{}", userLoginRequest.getUserName());
@@ -69,6 +76,7 @@ public class UserController {
      * @param id
      * @return
      */
+    @Operation(summary = "获取用户信息",description = "可以选择是否传入参数，未穿入参数代表查询当前用户信息，否则查询对应用户信息")
     @GetMapping("/info")
     public User getUserInfo(HttpServletRequest request, @RequestParam(value = "id", required = false) Long id) {
         //如果id为空，获取当前用户信息
@@ -81,7 +89,8 @@ public class UserController {
             return userService.selectUserInfoById(id);
         }
     }
-    @PostMapping("/modify")
+    @PostMapping("/modifyInfo")
+    @Operation(summary = "修改用户基本信息",description = "此方法可以修改的信息只有ModifyUerRequest类里面的信息")
     public boolean  modifyInfo(HttpServletRequest request,@RequestBody @Validated ModifyUerRequest modifyUerRequest) {
         //获取当前用户id
         Long userId = JwtUtil.getUserId(request);
@@ -95,5 +104,21 @@ public class UserController {
             throw new ApplicationException(Result.failed(ResultCode.ERROR_TYPE_CHANGE));
         }
         return userService.modifyUserInfoById(user);
+    }
+
+    @PostMapping("/modifyPassword")
+    @Operation(summary = "修改用户密码")
+    public Result modifyInfoPassword(HttpServletRequest request, @NotBlank String password,@NotBlank String repeatPassword) {
+        //确认两次密码是否相等
+        if(!password.equals(repeatPassword)) {
+            log.warn(ResultCode.FAILED_TWO_PWD_NOT_SAME.toString());
+            return Result.failed(ResultCode.FAILED_TWO_PWD_NOT_SAME);
+        }
+        //获取当前用户id
+        Long userId = JwtUtil.getUserId(request);
+        //密码加密
+        password = SecurityUtil.encrypt(password);
+        userService.modifyUserInfoPasswordById(password,userId);
+            return Result.sucess();
     }
 }

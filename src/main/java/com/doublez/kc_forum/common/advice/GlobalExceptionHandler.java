@@ -3,6 +3,7 @@ package com.doublez.kc_forum.common.advice;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -25,6 +27,7 @@ import java.util.Map;
 @ControllerAdvice
 @ResponseBody
 @Slf4j
+@Data
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApplicationException.class)
@@ -45,7 +48,11 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public Result exceptionHandler(Exception e) {
+    public Result exceptionHandler(Exception e) throws NoResourceFoundException {
+        // 排除资源未找到的异常
+        if (e instanceof NoResourceFoundException) {
+            throw (NoResourceFoundException) e; // 重新抛出，让 Spring 的默认处理器处理
+        }
         e.printStackTrace();//生产环境需要去掉
         log.error(e.getMessage());
 

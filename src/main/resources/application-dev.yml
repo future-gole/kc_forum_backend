@@ -25,12 +25,9 @@ logging:
   file:
     path: E:/log/kc_forum #日志保存路径
 
-springdoc:
-  api-docs:
-    path: /api-docs
-    enabled: true
-  swagger-ui:
-    path: /swagger-ui.html
-    disable-swagger-default-url: true
-    enabled: true
-  packages-to-scan: com.doublez.springblog.controller
+#springdoc:
+#  swagger-ui:
+#    path: /swagger-ui.html
+#    disable-swagger-default-url: true
+#    enabled: true
+#  packages-to-scan: com.doublez.kc_forum.controller

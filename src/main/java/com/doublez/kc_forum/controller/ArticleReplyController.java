@@ -12,6 +12,9 @@ import com.doublez.kc_forum.mapper.ArticleMapper;
 import com.doublez.kc_forum.model.User;
 import com.doublez.kc_forum.service.impl.ArticleReplyServiceImpl;
 import com.doublez.kc_forum.service.impl.UserServiceImpl;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,10 +22,11 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-
+@CrossOrigin(origins = "http://localhost:5173")
 @Slf4j
 @RestController
 @RequestMapping("/articleReply")
+@Tag(name = "帖子回复类",description = "帖子回复相关api")
 public class ArticleReplyController {
 
     @Autowired
@@ -35,6 +39,8 @@ public class ArticleReplyController {
     private ArticleMapper articleMapper;
 
     @PostMapping("/createArticleReply")
+    @Operation(summary = "创建回复帖子",
+            description = "先通过传入HttpServletRequest，后端通过获取token来获取当前用户id，进行判断是否被禁言，然后通过ArticleReplyAddRequest传入的参数进行创建帖子")
     public Result createArticleReply(HttpServletRequest request, @RequestBody @Validated ArticleReplyAddRequest articleReplyAddRequest) {
         //被禁言
         Long userId = JwtUtil.getUserId(request);
@@ -46,7 +52,9 @@ public class ArticleReplyController {
         return Result.sucess();
     }
     @GetMapping("/getArticleReplies")
-    public List<ViewArticleReplyResponse> getArticleReply(HttpServletRequest request, Long articleId) {
+    @Operation(summary = "获取回复帖子",
+            description = "通过articleId来获取当前列表下所有帖子")
+    public List<ViewArticleReplyResponse> getArticleReply(@Parameter(name = "帖子Id") Long articleId) {
         //有效性校验
         if(articleId != null && articleId > 0) {
             return articleReplyServiceImpl.getArticleReply(articleId);

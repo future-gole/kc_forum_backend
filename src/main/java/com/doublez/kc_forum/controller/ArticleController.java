@@ -15,6 +15,10 @@ import com.doublez.kc_forum.model.User;
 import com.doublez.kc_forum.service.impl.ArticleServiceImpl;
 import com.doublez.kc_forum.service.impl.BoardServiceImpl;
 import com.doublez.kc_forum.service.impl.UserServiceImpl;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
@@ -25,9 +29,10 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-
+@CrossOrigin(origins = "http://localhost:5173")
 @RestController
 @RequestMapping("/article")
+@Tag(name = "帖子类",description = "帖子相关api")
 @Slf4j
 public class ArticleController {
 
@@ -42,6 +47,8 @@ public class ArticleController {
 
 
     @PostMapping("/create")
+    @Operation(summary = "创建帖子", description = "创建一个新的帖子")
+    @ApiResponse(responseCode = "200", description = "成功")
     public Result<Object> create(HttpServletRequest request, @RequestBody @Validated ArticleAddRequest articleAddRequest) {
         //需要判断用户是否被禁言
         Long userId = JwtUtil.getUserId(request);
@@ -72,8 +79,9 @@ public class ArticleController {
      * @param boardId
      * @return
      */
+    @Operation(summary = "获取板块下的所有帖子", description = "根据板块 ID 获取所有帖子")
     @GetMapping("/getAllArticlesByBoardId")
-    public List<ViewArticlesResponse> getAllArticlesByBoardId(@RequestParam(required = false) Long boardId) {
+    public List<ViewArticlesResponse> getAllArticlesByBoardId(@Parameter(description = "板块 ID") @RequestParam(required = false) Long boardId) {
         if(boardId == null){
             return articleService.getAllArticlesByBoardId(null);
         }else if(boardId < 0){
@@ -88,8 +96,9 @@ public class ArticleController {
      * @param articleId 文章id
      * @return ArticleDetailResponse
      */
+    @Operation(summary = "获取帖子详情", description = "根据帖子 ID 获取所有帖子详情")
     @GetMapping("/getArticleDetailById")
-    public ArticleDetailResponse getArticleDetailById(HttpServletRequest request, Long articleId) {
+    public ArticleDetailResponse getArticleDetailById(HttpServletRequest request, @Parameter(description = "帖子ID") Long articleId) {
         if(articleId != null && articleId > 0){
             Long userId = JwtUtil.getUserId(request);
             return articleService.getArticleDetailById(userId,articleId);
@@ -99,7 +108,8 @@ public class ArticleController {
     }
 
     @GetMapping("/getAllArticlesByUserId")
-    public List<ViewArticlesResponse> getAllArticlesByUserId(Long userId) {
+    @Operation(summary = "获取用户所属帖子", description = "根据用户 ID 获取其下所有帖子列表，由前端控制传入的是当前用户还是查询的目标用户")
+    public List<ViewArticlesResponse> getAllArticlesByUserId(@Parameter(description = "用户ID")Long userId) {
         if(userId == null || userId < 0){
             log.error("参数校验失败 userId:{}", userId);
             throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
@@ -114,6 +124,8 @@ public class ArticleController {
      * @return 成功返回true
      */
     @PostMapping("/updateArticle")
+    @Operation(summary = "根据帖子id，更新帖子",
+            description = "通过request，获取当前用户id，进行鉴权和是否被禁言等判断，由前端传入updateArticleRequest对象，更新对应帖子信息")
     public boolean UpdateArticle(HttpServletRequest request, @RequestBody @Validated UpdateArticleRequest updateArticleRequest) {
         //简单判断
         if(updateArticleRequest.getId() < 1){
@@ -131,7 +143,8 @@ public class ArticleController {
     }
 
     @PostMapping("/deleteArticle")
-    public boolean DeleteArticle(HttpServletRequest request, @NotNull Long articleId) {
+    @Operation(summary = "根据帖子id，删除对应帖子")
+    public boolean DeleteArticle(HttpServletRequest request, @Parameter(description = "帖子ID")@NotNull Long articleId) {
         if(articleId == null || articleId <= 0){
             throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
         }

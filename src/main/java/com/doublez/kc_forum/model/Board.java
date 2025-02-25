@@ -2,6 +2,7 @@ package com.doublez.kc_forum.model;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Repository;
@@ -38,6 +39,7 @@ public class Board {
     private Integer sortPriority;
     private Byte state;
     private Byte deleteState;
+    @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

@@ -2,6 +2,7 @@ package com.doublez.kc_forum.model;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Repository;
@@ -41,6 +42,8 @@ public class Article {
     private Byte isTop;
     private Byte state;
     private Byte deleteState;
+    @JsonFormat(pattern = "yyyy-mm-dd")
     private LocalDateTime createTime;
+    @JsonFormat(pattern = "yyyy-mm-dd")
     private LocalDateTime updateTime;
 }

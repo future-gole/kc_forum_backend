@@ -144,6 +144,7 @@ public class UserServiceImpl implements IUserService {
                 .collect(Collectors.toMap(User::getId, user -> user));
     }
 
+    @Transactional
     @Override
     public boolean  modifyUserInfoById(User user) {
         if(user == null || user.getUserName() == null){
@@ -163,6 +164,21 @@ public class UserServiceImpl implements IUserService {
                 .eq(User::getId, user.getId()));
         if(row != 1) {
             log.error("{}: id = {}",user.getId(),ResultCode.FAILED_MODIFY_USER.getMessage());
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_MODIFY_USER));
+        }
+        return true;
+    }
+
+    @Transactional
+    @Override
+    public boolean modifyUserInfoPasswordById(String passowrd,Long id) {
+        //判断
+        if(id == null || id <= 0){
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        //密码需要加密
+        int row = userMapper.update(new LambdaUpdateWrapper<User>().set(User::getPassword,passowrd).eq(User::getId,id));
+        if(row != 1) {
             throw new ApplicationException(Result.failed(ResultCode.FAILED_MODIFY_USER));
         }
         return true;

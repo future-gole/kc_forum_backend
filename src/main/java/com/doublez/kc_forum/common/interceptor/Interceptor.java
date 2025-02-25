@@ -24,15 +24,15 @@ public class Interceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         // 获取 Authorization Header
-        String authorizationHeader = request.getHeader("Authorization");
-
-        // 检查 Authorization Header 是否存在 并且 校验 Token 是否有效
-        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")
-                || JwtUtil.parseToken(authorizationHeader.substring(7)) == null) {
-            log.warn("非法登录");
-            setUnauthorizedResponse(response, "非法登录");
-            return false;
-        }
+//        String authorizationHeader = request.getHeader("Authorization");
+//
+//        // 检查 Authorization Header 是否存在 并且 校验 Token 是否有效
+//        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")
+//                || JwtUtil.parseToken(authorizationHeader.substring(7)) == null) {
+//            log.warn("非法登录");
+//            setUnauthorizedResponse(response, "非法登录");
+//            return false;
+//        }
 
         return true;
     }

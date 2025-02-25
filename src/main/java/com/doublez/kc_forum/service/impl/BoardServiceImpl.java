@@ -44,8 +44,10 @@ public class BoardServiceImpl implements IBoardService {
 
     @Override
     public List<Board> selectAllBoards() {
-        return boardMapper.selectList(new LambdaQueryWrapper<Board>().orderByAsc(Board::getSortPriority)
+        List<Board> boardList = boardMapper.selectList(new LambdaQueryWrapper<Board>().orderByAsc(Board::getSortPriority)
                 .eq(Board::getDeleteState,0).eq(Board::getState,0));
+        log.info("boardList查询成功:{}", boardList);
+        return boardList;
     }
 
     /**
