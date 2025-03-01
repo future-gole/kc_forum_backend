@@ -10,10 +10,10 @@ spring:
     date-format: yyyy-mm-dd HH:mm:ss #格式化日期
     default-property-inclusion: non_null #为null的时候不格式化
   mail:
-    host: smtp.163.com
+    host: smtp.qq.com
     port: 465
-    username: zz1624475081@163.com
-    password: XJSV67kDAVNyEHvW
+    username: 1624475081@qq.com
+    password: gyfiybzapiamjfdf
     protocol: smtp
     properties: # 下面要用properties的写法才可以生效
       mail.smtp.auth: true
@@ -36,6 +36,13 @@ logging:
     com.doublez.kc_forum: debug #指定包下的日志级别
   file:
     path: E:/log/kc_forum #日志保存路径
+
+upload:
+  avatar-base-path: F:/upload # 头像存储的基础路径
+  avatar-base-url: http://localhost:58080/avatars # 头像访问的基础URL
+  base-path: F:/upload
+  base-url: http://localhost:58080
+
 
 #springdoc:
 #  swagger-ui:

@@ -6,6 +6,7 @@ import com.doublez.kc_forum.common.pojo.request.UserLoginRequest;
 import com.doublez.kc_forum.common.pojo.response.UserLoginResponse;
 import com.doublez.kc_forum.model.User;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -13,7 +14,7 @@ import java.util.Map;
 public interface IUserService {
 
 
-
+    String uploadAvatar(Long userId, MultipartFile file);
     public User selectUserInfoByUserName(String email);
 
     public Result createNormalUser(RegisterRequest registerRequest);

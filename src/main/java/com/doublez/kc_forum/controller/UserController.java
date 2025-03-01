@@ -22,10 +22,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,6 +41,25 @@ public class UserController {
 
     @Autowired
     private UserServiceImpl userService;
+
+
+
+    @PostMapping("/uploadAvatar")
+    @Operation(summary = "上传用户头像", description = "上传用户头像并更新用户信息的avatarUrl")
+    public Result<String> uploadAvatar(HttpServletRequest request, @RequestParam("file") MultipartFile file) {
+        // 获取当前用户id
+        Long userId = JwtUtil.getUserId(request);
+        log.info("用户 {} 上传头像", userId);
+
+        try {
+            // 调用服务上传头像
+            String avatarUrl = userService.uploadAvatar(userId, file);
+            return Result.sucess(avatarUrl); // 返回头像URL
+        } catch (Exception e) {
+            log.error("用户 {} 上传头像失败", userId, e);
+            return Result.failed(ResultCode.UPLOAD_FAILED); // 返回上传失败
+        }
+    }
 
     @PostMapping("/register")
     @Operation(summary = "用户注册")

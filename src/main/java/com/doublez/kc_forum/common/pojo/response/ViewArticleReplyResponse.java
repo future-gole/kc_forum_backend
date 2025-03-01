@@ -15,7 +15,7 @@ public class ViewArticleReplyResponse {
     private Long replyUserId;//楼主下的回复⽤⼾编号，⽀持楼中楼
     private String content;
     private Integer likeCount;
-    @JsonFormat(pattern = "yyyy-mm-dd")
+//    @JsonFormat(pattern = "yyyy-mm-dd")
     private LocalDateTime createTime;
     //关联对象
     private UserArticleResponse user;

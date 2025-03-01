@@ -15,19 +15,22 @@ import com.doublez.kc_forum.mapper.UserMapper;
 import com.doublez.kc_forum.model.EmailVerification;
 import com.doublez.kc_forum.model.User;
 import com.doublez.kc_forum.service.IUserService;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -40,6 +43,71 @@ public class UserServiceImpl implements IUserService {
     @Autowired
     private EmailVerificationMapper verificationMapper;
 
+    @Value("${upload.avatar-base-path}")
+    private String avatarBasePath;
+
+    @Value("${upload.avatar-base-url}")
+    private String avatarBaseUrl;
+
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String uploadAvatar(Long userId, MultipartFile file) {
+        try {
+            // 1. 校验文件类型
+            String originalFilename = file.getOriginalFilename();
+            String fileExtension = getFileExtension(originalFilename);
+            if (!isValidImageType(fileExtension)) {
+                throw new ApplicationException(Result.failed(ResultCode.INVALID_FILE_TYPE));
+            }
+
+            // 2. 生成唯一文件名
+            String uniqueFileName = "avatar_" + userId + "_" + UUID.randomUUID().toString() + "." + fileExtension;
+
+            // 3. 构建存储路径（按用户ID分目录）
+            String relativePath = "/avatars/" + userId + "/";
+            Path directoryPath = Paths.get(avatarBasePath, relativePath);
+
+            // 4. 创建目录
+            Files.createDirectories(directoryPath);
+
+            // 5. 完整文件路径
+            Path filePath = Paths.get(avatarBasePath, relativePath, uniqueFileName);
+
+            // 6. 保存文件
+            Files.write(filePath, file.getBytes());
+
+            // 7. 更新用户表中的 avatar_url 字段
+            String avatarUrl = relativePath + uniqueFileName;
+            User user = new User();
+            user.setId(userId);
+            user.setAvatarUrl(avatarUrl);
+            userMapper.updateById(user);
+
+            // 8. 返回完整的头像URL
+            return avatarBaseUrl + avatarUrl;
+
+        } catch (IOException e) {
+            log.error("用户 {} 上传头像失败", userId, e);
+            throw new ApplicationException(Result.failed(ResultCode.UPLOAD_FAILED));
+        }
+    }
+
+    // 校验文件类型是否为图片
+    private boolean isValidImageType(String fileExtension) {
+        String lowerCaseExtension = fileExtension.toLowerCase();
+        return lowerCaseExtension.equals("jpg") || lowerCaseExtension.equals("jpeg") ||
+                lowerCaseExtension.equals("png") || lowerCaseExtension.equals("gif");
+    }
+
+    // 获取文件扩展名
+    private String getFileExtension(String filename) {
+        if (filename != null && filename.contains(".")) {
+            return filename.substring(filename.lastIndexOf(".") + 1);
+        } else {
+            return "";
+        }
+    }
 
     @Override
     public User selectUserInfoByUserName(String email) {

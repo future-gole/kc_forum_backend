@@ -28,4 +28,6 @@ public interface IArticleReplyService {
      * @return
      */
     int updateLikeCount(Long targetId, int increment);
+
+    int deleteArticleReply(Long articleId);
 }

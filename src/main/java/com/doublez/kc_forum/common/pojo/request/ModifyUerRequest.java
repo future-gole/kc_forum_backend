@@ -22,4 +22,5 @@ public class ModifyUerRequest {
     private String email;
     private Integer gender;
     private String remark;
+    private String avatarUrl;
 }

@@ -62,4 +62,14 @@ public class ArticleReplyController {
         log.error("传入参数有错，articleId:{}", articleId);
         throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
     }
+
+    @PostMapping("/deleteArticleReply")
+    @Operation(summary = "删除回复帖子")
+    public void deleteArticleReply(@Parameter(name = "articleId") Long articleReplyId) {
+        if(articleReplyId != null && articleReplyId > 0) {
+            if(articleReplyServiceImpl.deleteArticleReply(articleReplyId) != 1){
+                throw new ApplicationException(Result.failed(ResultCode.FAILED_REPLY_DELETE));
+            }
+        }
+    }
 }

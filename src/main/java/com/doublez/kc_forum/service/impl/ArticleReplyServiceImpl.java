@@ -124,6 +124,13 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
                 .setSql("like_count = like_count + " + increment));
     }
 
+    @Override
+    public int deleteArticleReply(Long articleId) {
+        return articleReplyMapper.update(new LambdaUpdateWrapper<ArticleReply>()
+                .set(ArticleReply::getDeleteState,1)
+                .eq(ArticleReply::getId,articleId));
+    }
+
     // 类型转化抽取出来的通用方法
     private <Source, Target> Target copyProperties(Source source, Class<Target> targetClass) {
         try {

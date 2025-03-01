@@ -14,7 +14,8 @@ public enum ResultCode {
     FAILED_CREATE (1004, "新增失败"),
     FAILED_NOT_EXISTS (1005, "资源不存在"),
     FAILED_BOARD_NOT_EXISTS(1006,"板块不存在"),
-    FAILED_TOKEN_EXISTS(1107,"TOKEN不存在"),
+    FAILED_TOKEN_EXISTS(1007,"TOKEN不存在"),
+    INVALID_FILE_TYPE(1008,"不符合的图片格式"),
 
     AILED_USER_EXISTS (1101, "用户已存在"),
     FAILED_USER_NOT_EXISTS (1102, "用户不存在"),
@@ -23,6 +24,7 @@ public enum ResultCode {
     FAILED_TWO_PWD_NOT_SAME (1105, "两次输入的密码不⼀致"),
     FAILED_MODIFY_USER(1106,"用户信息更新失败"),
     FAILED_CHECK_USERID(1107,"未获取到用户ID"),
+    UPLOAD_FAILED(1108,"头像上传失败"),
     ERROR_SERVICES (2000, "服务器内部错误"),
     ERROR_TYPE_CHANGE(2001,"BeanUtil类型转化异常"),
     ERROR_IS_NULL (2001, "IS NULL."),
@@ -31,6 +33,7 @@ public enum ResultCode {
     FAILED_UPDATE_ARTICLE(3002,"帖子更新失败"),
     FAILED_ARTICLE_BANNED(3003,"帖子被禁言"),
     FAILED_ARTICLE_DELETE(3004,"帖子删除失败"),
+    FAILED_REPLY_DELETE(3005,"回复帖子删除失败"),
 
     FAILED_CHANGE_LIKE(4001,"增加/删除点赞失败"),
 
