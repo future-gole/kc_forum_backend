@@ -19,6 +19,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .excludePathPatterns("/user/login")
                 .excludePathPatterns("/user/register")
                 .excludePathPatterns("/v3/api-docs")
+                .excludePathPatterns("/user/verifyEmail")
+                .excludePathPatterns("/user/sendVerificationCode")
                 .excludePathPatterns("/swagger-ui/**");//记得需要排除静态文件，没有分离的情况下
     }
     @Override

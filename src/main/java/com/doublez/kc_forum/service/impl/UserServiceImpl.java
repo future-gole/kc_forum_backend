@@ -5,21 +5,29 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.pojo.request.RegisterRequest;
 import com.doublez.kc_forum.common.pojo.request.UserLoginRequest;
 import com.doublez.kc_forum.common.pojo.response.UserLoginResponse;
 import com.doublez.kc_forum.common.utiles.JwtUtil;
 import com.doublez.kc_forum.common.utiles.SecurityUtil;
+import com.doublez.kc_forum.mapper.EmailVerificationMapper;
 import com.doublez.kc_forum.mapper.UserMapper;
+import com.doublez.kc_forum.model.EmailVerification;
 import com.doublez.kc_forum.model.User;
 import com.doublez.kc_forum.service.IUserService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,9 +37,13 @@ public class UserServiceImpl implements IUserService {
     @Autowired
     private UserMapper userMapper;
 
+    @Autowired
+    private EmailVerificationMapper verificationMapper;
+
+
     @Override
-    public User selectUserInfoByUserName(String userName) {
-        User user = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getUserName, userName));
+    public User selectUserInfoByUserName(String email) {
+        User user = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getEmail, email));
 
         if (user == null) {
             throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
@@ -41,23 +53,30 @@ public class UserServiceImpl implements IUserService {
 
     @Transactional
     @Override
-    public Integer createNormalUser(User user) {
-        //非空校验
-        if (user == null || user.getUserName() == null
-                || user.getPassword() == null || user.getNickName() == null) {
-            //打印日志
-            log.warn(ResultCode.FAILED_USER_NOT_EXISTS.toString());
-            //抛异常
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
+    public Result createNormalUser(RegisterRequest registerRequest) {
         //判断用户名是否存在,名字有重名的可能，可以转为邮箱
-        //TODO 判断邮箱是否存在即可
+        // 检查邮箱验证状态
+        EmailVerification verification = verificationMapper.selectOne(new LambdaQueryWrapper<EmailVerification>()
+                .eq(EmailVerification::getEmail, registerRequest.getEmail()));
+
+        if (verification == null || !verification.getVerified()) {
+            return Result.failed(ResultCode.ERROR_EMAIL_NOT_VERIFIED);
+        }
+        //!!!!不能注入，要创建新的对象
+        User user = new User();
+        //密码加密
+        registerRequest.setPassword(SecurityUtil.encrypt(registerRequest.getPassword()));
+        //类型转化
+        try {
+            BeanUtils.copyProperties(registerRequest, user);
+        } catch (BeansException e) {
+            log.error(ResultCode.ERROR_TYPE_CHANGE.toString());
+            throw new ApplicationException(Result.failed(ResultCode.ERROR_TYPE_CHANGE));
+        }
 
         //新增用户默认值用代码控制
         //TODO。。。
-        int result = 0;
-            result = userMapper.insert(user);
-
+        int result = userMapper.insert(user);
 
         if(result != 1) {
             //打印日志
@@ -67,14 +86,14 @@ public class UserServiceImpl implements IUserService {
         }
         //打印日志
         log.info("新增用户成功,username:" + user.getUserName());
-        return result;
+        return Result.sucess();
     }
 
     @Override
     public UserLoginResponse login(UserLoginRequest loginRequest) {
         //判断用户是否存在,查询信息
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getUserName, loginRequest.getUserName())
+                .eq(User::getEmail, loginRequest.getEmail())
                 .eq(User::getDeleteState,0));
         //用户不存在
         if(user == null){
@@ -89,8 +108,8 @@ public class UserServiceImpl implements IUserService {
         loginResponse.setUserId(user.getId());
         //放入载荷
         Map<String,Object> map = new HashMap<>();
-        map.put("userName",loginRequest.getUserName());
-        map.put("id", user.getId());
+        map.put("email",loginRequest.getEmail());
+        map.put("Id", user.getId());
         loginResponse.setAuthorization(JwtUtil.getToken(map));
         return loginResponse;
 
@@ -147,17 +166,22 @@ public class UserServiceImpl implements IUserService {
     @Transactional
     @Override
     public boolean  modifyUserInfoById(User user) {
-        if(user == null || user.getUserName() == null){
+        if(user == null || user.getEmail() == null){
             log.warn(ResultCode.FAILED_USER_NOT_EXISTS.toString());
+
             return false;
         }
-        //todo 用什么作为唯一校验
+        //用邮箱作为唯一校验？？？
+        if(userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .select(User::getId)
+                .eq(User::getEmail,user.getEmail())) == null){
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
+        }
         //。。。补充完整校验
         //改进，判断有变化再改，如果都没变化就可以不用改
         int row = userMapper.update(new LambdaUpdateWrapper<User>()
                 .set(User::getUserName,user.getUserName())
                 .set(User::getNickName, user.getNickName())
-                .set(User::getEmail,user.getEmail())
                 .set(User::getGender,user.getGender())
                 .set(User::getPhone,user.getPhone())
                 .set(User::getRemark,user.getRemark())
@@ -171,17 +195,44 @@ public class UserServiceImpl implements IUserService {
 
     @Transactional
     @Override
-    public boolean modifyUserInfoPasswordById(String passowrd,Long id) {
+    public void modifyUserInfoPasswordById(String password,Long id) {
         //判断
         if(id == null || id <= 0){
             throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         //密码需要加密
-        int row = userMapper.update(new LambdaUpdateWrapper<User>().set(User::getPassword,passowrd).eq(User::getId,id));
-        if(row != 1) {
+        password = SecurityUtil.encrypt(password);
+        if(userMapper.update(new LambdaUpdateWrapper<User>()
+                .set(User::getPassword,password)
+                .eq(User::getId,id)
+                .eq(User::getDeleteState,0)) != 1) {
             throw new ApplicationException(Result.failed(ResultCode.FAILED_MODIFY_USER));
         }
-        return true;
+
+    }
+    @Transactional
+    @Override
+    public Result modifyUserInfoEmailById(String email, Long id) {
+        //判断
+        if(id == null || id <= 0){
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        //验证邮箱状态
+        // 检查邮箱验证状态
+        EmailVerification verification = verificationMapper.selectOne(new LambdaQueryWrapper<EmailVerification>()
+                .eq(EmailVerification::getEmail, email));
+
+        if (verification == null || !verification.getVerified()) {
+            return Result.failed(ResultCode.ERROR_EMAIL_NOT_VERIFIED);
+        }
+
+        if(userMapper.update(new LambdaUpdateWrapper<User>()
+                .set(User::getEmail,email)
+                .eq(User::getId,id)
+                .eq(User::getDeleteState,0)) != 1) {
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_MODIFY_USER));
+        }
+        return Result.sucess();
     }
 
 }

@@ -9,6 +9,18 @@ spring:
   jackson:
     date-format: yyyy-mm-dd HH:mm:ss #格式化日期
     default-property-inclusion: non_null #为null的时候不格式化
+  mail:
+    host: smtp.163.com
+    port: 465
+    username: zz1624475081@163.com
+    password: XJSV67kDAVNyEHvW
+    protocol: smtp
+    properties: # 下面要用properties的写法才可以生效
+      mail.smtp.auth: true
+      mail.smtp.ssl.enable: true  # 启用SSL
+      mail.smtp.socketFactory.class: javax.net.ssl.SSLSocketFactory
+#      mail.debug: true  # 开启调试日志
+    default-encoding: utf-8
 
 server:
   port: 58080

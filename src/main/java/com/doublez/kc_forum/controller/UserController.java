@@ -13,16 +13,22 @@ import com.doublez.kc_forum.model.User;
 import com.doublez.kc_forum.service.impl.UserServiceImpl;
 import io.jsonwebtoken.Claims;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @CrossOrigin(origins = "http://localhost:5173") // 指定前端地址
 @RestController
@@ -44,30 +50,66 @@ public class UserController {
             log.warn(ResultCode.FAILED_TWO_PWD_NOT_SAME.toString());
             return Result.failed(ResultCode.FAILED_TWO_PWD_NOT_SAME);
         }
-
-        //!!!!不能注入，要创建新的对象
-        User user = new User();
-        //密码加密
-        registerRequest.setPassword(SecurityUtil.encrypt(registerRequest.getPassword()));
-        //类型转化
-        try {
-            BeanUtils.copyProperties(registerRequest, user);
-        } catch (BeansException e) {
-            log.error(ResultCode.ERROR_TYPE_CHANGE.toString());
-            throw new ApplicationException(Result.failed(ResultCode.ERROR_TYPE_CHANGE));
-        }
-
-        userService.createNormalUser(user);
         //返回成功
-        return Result.sucess();
+        return userService.createNormalUser(registerRequest);
     }
 
     @PostMapping("/login")
     @Operation(summary = "用户登陆")
     public UserLoginResponse login(@RequestBody @Validated
                                    UserLoginRequest userLoginRequest){
-        log.info("用户登录{}", userLoginRequest.getUserName());
+        log.info("用户登录,邮箱：{}", userLoginRequest.getEmail());
         return userService.login(userLoginRequest);
+    }
+
+    // 令牌续期接口
+    @PostMapping("/renew")
+    public ResponseEntity<?> renewToken(@RequestHeader("Authorization") String authHeader) {
+        // 从Authorization头获取令牌
+        String token = null;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            token = authHeader.substring(7);
+        }
+
+        if (token == null) {
+            log.info(ResultCode.FAILED_TOKEN_EXISTS.toString());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Result.failed(ResultCode.FAILED_TOKEN_EXISTS));
+        }
+
+        // 从令牌中获取用户信息
+        Claims claims = JwtUtil.parseToken(token);
+
+        Long userId = null;
+        String email = null;
+        if (claims != null && claims.containsKey("Id")) {
+            try {
+                userId = Long.valueOf(claims.get("Id").toString());
+                email = String.valueOf(claims.get("email").toString());
+            }catch (Exception e) {
+                throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+            }
+        }
+        //验证用户是否存在
+        User user = null;
+        if(userId != null) {
+            user = userService.selectUserInfoById(userId);
+        }
+        if (user == null) {
+            log.info(ResultCode.FAILED_USER_NOT_EXISTS.toString());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
+        }
+
+        //放入载荷
+        Map<String,Object> map = new HashMap<>();
+        map.put("email",email);
+        map.put("Id", userId);
+        String newToken = JwtUtil.getToken(map);
+
+        // 返回新令牌
+        Map<String, String> response = new HashMap<>();
+        response.put("token", newToken);
+
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -108,7 +150,8 @@ public class UserController {
 
     @PostMapping("/modifyPassword")
     @Operation(summary = "修改用户密码")
-    public Result modifyInfoPassword(HttpServletRequest request, @NotBlank String password,@NotBlank String repeatPassword) {
+    public Result modifyInfoPassword(HttpServletRequest request, @Parameter(description = "密码") @NotBlank String password,
+                                     @Parameter(description = "重复密码")@NotBlank String repeatPassword) {
         //确认两次密码是否相等
         if(!password.equals(repeatPassword)) {
             log.warn(ResultCode.FAILED_TWO_PWD_NOT_SAME.toString());
@@ -116,9 +159,19 @@ public class UserController {
         }
         //获取当前用户id
         Long userId = JwtUtil.getUserId(request);
-        //密码加密
-        password = SecurityUtil.encrypt(password);
+
         userService.modifyUserInfoPasswordById(password,userId);
-            return Result.sucess();
+        return Result.sucess();
+    }
+
+    @PostMapping("/modifyEmail")
+    @Operation(summary = "修改用户邮箱")
+    public Result modifyInfoPassword(HttpServletRequest request,@Email String email) {
+
+        //获取当前用户id
+        Long userId = JwtUtil.getUserId(request);
+
+        userService.modifyUserInfoEmailById(email,userId);
+        return Result.sucess();
     }
 }

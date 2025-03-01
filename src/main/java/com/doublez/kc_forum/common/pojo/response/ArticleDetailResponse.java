@@ -16,7 +16,6 @@ public class ArticleDetailResponse {
     private Integer visitCount;
     private Integer replyCount;
     private Integer likeCount;
-    @JsonFormat(pattern = "yyyy-mm-dd HH:mm:ss")
     private LocalDateTime createTime;
     //关联对象
     private UserArticleResponse user;

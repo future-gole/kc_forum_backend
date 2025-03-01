@@ -1,5 +1,7 @@
 package com.doublez.kc_forum.service;
 
+import com.doublez.kc_forum.common.Result;
+import com.doublez.kc_forum.common.pojo.request.RegisterRequest;
 import com.doublez.kc_forum.common.pojo.request.UserLoginRequest;
 import com.doublez.kc_forum.common.pojo.response.UserLoginResponse;
 import com.doublez.kc_forum.model.User;
@@ -10,9 +12,11 @@ import java.util.Map;
 
 public interface IUserService {
 
-    public User selectUserInfoByUserName(String userName);
 
-    public Integer createNormalUser(User user);
+
+    public User selectUserInfoByUserName(String email);
+
+    public Result createNormalUser(RegisterRequest registerRequest);
 
     public UserLoginResponse login(UserLoginRequest loginRequest);
 
@@ -33,5 +37,7 @@ public interface IUserService {
     @Transactional
     boolean   modifyUserInfoById(User user);
     @Transactional
-    boolean modifyUserInfoPasswordById(String password, Long id);
+    void modifyUserInfoPasswordById(String password, Long id);
+    @Transactional
+    Result modifyUserInfoEmailById(String email,Long id);
 }

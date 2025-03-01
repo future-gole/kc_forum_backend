@@ -50,7 +50,7 @@ public class ResponseAdvice implements ResponseBodyAdvice<Object> {
             return body;
         }
 
-        // 处理 String 类型特殊情况
+        // 处理 String 类型特殊情况,需要特殊处理来过滤springdoc的相关返回结果
         if (body instanceof String) {
             response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
             return objectMapper.writeValueAsString(Result.sucess(body));

@@ -23,7 +23,9 @@ public class JwtUtil {
     private static final Key key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
 
 
-    private static final Integer expiration = 3600000;
+    private static final Integer expiration = 7200000;
+
+
 
     /**
      * 生成token
@@ -85,9 +87,9 @@ public class JwtUtil {
 
         // 3. 从 claims 中获取用户 ID
         Long userId = null;
-        if (claims != null && claims.containsKey("id")) {
+        if (claims != null && claims.containsKey("Id")) {
             try {
-                userId = Long.valueOf(claims.get("id").toString());
+                userId = Long.valueOf(claims.get("Id").toString());
             } catch (NumberFormatException e) {
                 // 处理 "id" 不是 Integer 类型的情况
                 throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
@@ -95,7 +97,7 @@ public class JwtUtil {
         }
         if (userId == null) {
             // 处理用户 ID 为空的情况
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_CHECK_USERID));
         }
         return userId;
     }
