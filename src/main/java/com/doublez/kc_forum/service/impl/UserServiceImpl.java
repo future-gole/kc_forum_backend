@@ -15,6 +15,8 @@ import com.doublez.kc_forum.mapper.UserMapper;
 import com.doublez.kc_forum.model.EmailVerification;
 import com.doublez.kc_forum.model.User;
 import com.doublez.kc_forum.service.IUserService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeansException;
@@ -49,6 +51,10 @@ public class UserServiceImpl implements IUserService {
     @Value("${upload.avatar-base-url}")
     private String avatarBaseUrl;
 
+    @Autowired
+    private RefreshTokenService refreshTokenService;
+    @Value("${jwt.refresh-token.expiration-ms}")
+    private long refreshTokenExpirationMillis;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -62,7 +68,7 @@ public class UserServiceImpl implements IUserService {
             }
 
             // 2. 生成唯一文件名
-            String uniqueFileName = "avatar_" + userId + "_" + UUID.randomUUID().toString() + "." + fileExtension;
+            String uniqueFileName = "avatar_" + userId + "_" + UUID.randomUUID() + "." + fileExtension;
 
             // 3. 构建存储路径（按用户ID分目录）
             String relativePath = "/avatars/" + userId + "/";
@@ -74,17 +80,34 @@ public class UserServiceImpl implements IUserService {
             // 5. 完整文件路径
             Path filePath = Paths.get(avatarBasePath, relativePath, uniqueFileName);
 
-            // 6. 保存文件
+            // 6. 查询旧头像的 URL
+            User existingUser = userMapper.selectById(userId);
+            String oldAvatarUrl = (existingUser != null) ? existingUser.getAvatarUrl() : null;
+
+            // 7. 保存新文件
             Files.write(filePath, file.getBytes());
 
-            // 7. 更新用户表中的 avatar_url 字段
+            // 8. 更新用户表中的 avatar_url 字段
             String avatarUrl = relativePath + uniqueFileName;
             User user = new User();
             user.setId(userId);
             user.setAvatarUrl(avatarUrl);
             userMapper.updateById(user);
 
-            // 8. 返回完整的头像URL
+            // 9. 删除旧头像 (如果存在)
+            if (oldAvatarUrl != null && !oldAvatarUrl.isEmpty()) {
+                Path oldAvatarPath = Paths.get(avatarBasePath, oldAvatarUrl);
+                try {
+                    Files.deleteIfExists(oldAvatarPath); // 尝试删除，如果不存在也不会报错
+                } catch (IOException e) {
+                    // 旧头像删除失败，记录日志，但不影响新头像上传
+                    log.error("删除旧头像失败: {}", oldAvatarPath, e);
+                    // 这里可以考虑抛出自定义异常，或者通过其他方式通知管理员
+                    // 但不应该回滚事务，因为新头像已经上传成功了
+                }
+            }
+
+            // 10. 返回完整的头像URL
             return avatarBaseUrl + avatarUrl;
 
         } catch (IOException e) {
@@ -158,7 +181,7 @@ public class UserServiceImpl implements IUserService {
     }
 
     @Override
-    public UserLoginResponse login(UserLoginRequest loginRequest) {
+    public UserLoginResponse login(UserLoginRequest loginRequest, HttpServletResponse response) {
         //判断用户是否存在,查询信息
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getEmail, loginRequest.getEmail())
@@ -175,10 +198,41 @@ public class UserServiceImpl implements IUserService {
         UserLoginResponse loginResponse = new UserLoginResponse();
         loginResponse.setUserId(user.getId());
         //放入载荷
-        Map<String,Object> map = new HashMap<>();
-        map.put("email",loginRequest.getEmail());
-        map.put("Id", user.getId());
-        loginResponse.setAuthorization(JwtUtil.getToken(map));
+        Map<String,Object> accessTokenClaims  = new HashMap<>();
+        accessTokenClaims .put("email",loginRequest.getEmail());
+        accessTokenClaims .put("Id", user.getId());
+        String accessToken = JwtUtil.genToken(accessTokenClaims);
+
+        // --- 生成 Refresh Token (随机字符串) ---
+        String refreshTokenString = UUID.randomUUID().toString();
+
+        //放入 认证的jwt
+        loginResponse.setAuthorization(accessToken);
+        // --- !! 设置 Refresh Token 到 HttpOnly Cookie !! ---
+        Cookie refreshTokenCookie = new Cookie("refreshToken", refreshTokenString); // Cookie 名称为 "refreshToken"
+        refreshTokenCookie.setHttpOnly(true); // !! 关键：设置为 HttpOnly !!
+        refreshTokenCookie.setSecure(true); // !! 关键：仅在 HTTPS 下传输 (生产环境必须 true) !!
+        refreshTokenCookie.setPath("/api/token"); // !! 关键：设置 Cookie 的路径，通常是刷新接口的路径或更上层路径 !!
+        refreshTokenCookie.setMaxAge((int) (refreshTokenExpirationMillis / 1000)); // 设置 Cookie 过期时间 (秒)
+        // refreshTokenCookie.setDomain("yourdomain.com"); // (可选) 生产环境设置域名
+        // SameSite 策略: Strict 最严格，Lax 常用平衡点。防止 CSRF。
+        // 注意: 在 Spring Boot 2.x/3.x 中，可以通过 application.yml 或配置类统一设置 SameSite
+        // response.setHeader("Set-Cookie", refreshTokenCookie.toString() + "; SameSite=Strict"); // 手动添加 SameSite
+        // 或者使用 Spring 提供的 ResponseCookie Builder (更推荐)
+        // ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshTokenString)
+        //         .httpOnly(true)
+        //         .secure(true) // 生产环境设置为 true
+        //         .path("/api/token") // 限制 Cookie 路径
+        //         .maxAge(Duration.ofMillis(refreshTokenExpirationMillis))
+        //         .sameSite("Strict") // "Lax" 或 "Strict"
+        //         // .domain("yourdomain.com") // 生产环境设置
+        //         .build();
+        // response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+
+        response.addCookie(refreshTokenCookie); // 添加 Cookie 到响应
+
+        //添加refreshToken到redis
+        refreshTokenService.createRefreshToken(refreshTokenString);
         return loginResponse;
 
     }
@@ -192,7 +246,7 @@ public class UserServiceImpl implements IUserService {
         if (user == null) {
             throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
         }
-        log.info("查询用户成功");
+        log.info("查询用户成功,用户id:{}",id);
         return user;
     }
 

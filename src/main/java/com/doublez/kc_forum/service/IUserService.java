@@ -5,6 +5,7 @@ import com.doublez.kc_forum.common.pojo.request.RegisterRequest;
 import com.doublez.kc_forum.common.pojo.request.UserLoginRequest;
 import com.doublez.kc_forum.common.pojo.response.UserLoginResponse;
 import com.doublez.kc_forum.model.User;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -19,7 +20,7 @@ public interface IUserService {
 
     public Result createNormalUser(RegisterRequest registerRequest);
 
-    public UserLoginResponse login(UserLoginRequest loginRequest);
+    public UserLoginResponse login(UserLoginRequest loginRequest, HttpServletResponse response);
 
     public User selectUserInfoById(Long id);
 

@@ -9,7 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
-@CrossOrigin(origins = "http://localhost:5173") // 指定前端地址
+
 @RequestMapping("/email")
 @RestController
 @Slf4j
@@ -20,7 +20,8 @@ public class emailController {
     @Operation(summary = "发送邮箱验证码")
     public Result sendVerificationCode(@RequestParam @Email String email) {
         log.info("发送验证码到邮箱: {}", email);
-        return emailService.sendVerificationCode(email);
+        emailService.sendVerificationCode(email);
+        return Result.sucess();
     }
 
     @PostMapping("/verifyEmail")
@@ -28,6 +29,7 @@ public class emailController {
     public Result verifyEmail(@RequestParam @Email String email,
                               @RequestParam String code) {
         log.info("验证邮箱: {}", email);
-        return emailService.verifyEmail(email, code);
+         emailService.verifyEmail(email, code);
+         return Result.sucess();
     }
 }

@@ -21,7 +21,10 @@ spring:
       mail.smtp.socketFactory.class: javax.net.ssl.SSLSocketFactory
 #      mail.debug: true  # 开启调试日志
     default-encoding: utf-8
-
+  data:
+    redis:
+      port: 6379
+      host: 127.0.0.1
 server:
   port: 58080
 mybatis-plus:
@@ -33,7 +36,7 @@ logging:
     dateformat: yyyy-MM-dd HH:mm:ss
   level:
     root: info #日志默认级别
-    com.doublez.kc_forum: debug #指定包下的日志级别
+#    com.doublez.kc_forum: debug #指定包下的日志级别
   file:
     path: E:/log/kc_forum #日志保存路径
 
@@ -42,6 +45,18 @@ upload:
   avatar-base-url: http://localhost:58080/avatars # 头像访问的基础URL
   base-path: F:/upload
   base-url: http://localhost:58080
+
+jwt:
+  secret: FzG6p48J80L6vFxLrQqy2JVN27NiYbgjtGuYCTpeX7w= # 你的密钥，确保足够复杂和保密
+  access-token:
+    expiration-ms: 10000 # Access Token 过期时间 (30分钟 = 30 * 60 * 1000)
+  refresh-token:
+    expiration-ms: 604800000 # Refresh Token 过期时间 (7天 = 7 * 24 * 60 * 60 * 1000)
+  proactive-refresh:
+    # 提前刷新阈值 (毫秒)，例如 5 分钟: 5 * 60 * 1000 = 300000
+    # 如果 Access Token 剩余有效期小于等于此值，则尝试主动刷新
+    # 设置为 0 或负数则禁用此功能
+    threshold-ms: 300000
 
 
 #springdoc:

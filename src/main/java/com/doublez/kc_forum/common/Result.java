@@ -16,11 +16,24 @@ public class Result<T> {
     @JsonInclude(JsonInclude.Include.ALWAYS)//总是参与序列化
     private T data;
 
+    // 新增字段：用于存放刷新的 Access Token
+    @JsonInclude(JsonInclude.Include.NON_NULL) // 仅在不为 null 时参与序列化
+    private String newAccessToken;
+
     public Result(int code, String message) {
         this.code = code;
         this.message = message;
     }
 
+    public Result(String newAccessToken) {
+        this.newAccessToken = newAccessToken;
+    }
+    // 新增一个包含所有字段（除了 newAccessToken）的构造函数，方便工厂方法使用
+    public Result(int code, String message, T data) {
+        this.code = code;
+        this.message = message;
+        this.data = data;
+    }
     /**
      * 成功的返回
      */

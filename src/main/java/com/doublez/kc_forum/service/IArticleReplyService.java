@@ -29,5 +29,5 @@ public interface IArticleReplyService {
      */
     int updateLikeCount(Long targetId, int increment);
 
-    int deleteArticleReply(Long articleId);
+    int deleteArticleReply(Long userId,Long articleReplyId,Long articleId);
 }

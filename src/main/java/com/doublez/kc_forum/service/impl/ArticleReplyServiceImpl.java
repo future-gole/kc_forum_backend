@@ -19,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.Collections;
@@ -41,7 +42,8 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
     @Override
     public void createArticleReply(ArticleReplyAddRequest articleReplyAddRequest) {
         if(articleReplyAddRequest == null || articleReplyAddRequest.getArticleId() == null
-                || articleReplyAddRequest.getPostUserId() == null || articleReplyAddRequest.getArticleId() <= 0
+                || articleReplyAddRequest.getPostUserId() == null || articleReplyAddRequest.getReplyUserId() == null
+                || articleReplyAddRequest.getArticleId() <= 0
                 || !StringUtils.hasText(articleReplyAddRequest.getContent())) {
             throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -71,7 +73,7 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
                 .setSql("reply_count = reply_count + 1").eq(Article::getId,articleReplyAddRequest.getArticleId()));
 
         //打印日志
-        log.info("回帖成功, 回帖id: {} 用户id：{} 帖子id: {}", articleReply.getId(), articleReply.getPostUserId(), articleReply.getArticleId());
+        log.info("回帖成功, 回帖id: {} 用户id：{} 帖子id: {}", articleReply.getId(), articleReply.getReplyUserId(), articleReply.getArticleId());
 
     }
 
@@ -92,7 +94,7 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
         }
         //2. 提取所有 userId
         List<Long> userIds = articleReplies.stream()
-                .map(ArticleReply::getPostUserId)
+                .map(ArticleReply::getReplyUserId)
                 .distinct()//去重
                 .toList();
         Map<Long, User> userMap = userServiceImpl.selectUserInfoByIds(userIds);
@@ -100,7 +102,7 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
         //3. 组装数据
 
         List<ViewArticleReplyResponse> viewArticleReplysResponse = articleReplies.stream().map(articleReply -> {
-            User user = userMap.get(articleReply.getPostUserId());
+            User user = userMap.get(articleReply.getReplyUserId());
             //判断用户是否存在
             IsEmptyClass.Empty(user,ResultCode.FAILED_USER_NOT_EXISTS,articleReply.getArticleId());
 
@@ -124,11 +126,22 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
                 .setSql("like_count = like_count + " + increment));
     }
 
+    @Transactional
     @Override
-    public int deleteArticleReply(Long articleId) {
-        return articleReplyMapper.update(new LambdaUpdateWrapper<ArticleReply>()
+    public int deleteArticleReply(Long useId,Long articleReplyId,Long articleId) {
+        int row = articleReplyMapper.update(new LambdaUpdateWrapper<ArticleReply>()
                 .set(ArticleReply::getDeleteState,1)
-                .eq(ArticleReply::getId,articleId));
+                .eq(ArticleReply::getReplyUserId,useId)
+                .eq(ArticleReply::getArticleId,articleId)
+                .eq(ArticleReply::getId,articleReplyId));
+        if(row != 1) {
+            throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_DELETE));
+        }
+        log.info("回复贴删除, articleReplyId:{}",articleReplyId);
+        //减少帖子数量
+        //更新帖子回复数量+1
+        return articleMapper.update(new LambdaUpdateWrapper<Article>()
+                .setSql("reply_count = reply_count - 1").eq(Article::getId,articleId));
     }
 
     // 类型转化抽取出来的通用方法

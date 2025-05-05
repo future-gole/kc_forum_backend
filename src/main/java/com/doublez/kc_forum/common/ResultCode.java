@@ -16,6 +16,7 @@ public enum ResultCode {
     FAILED_BOARD_NOT_EXISTS(1006,"板块不存在"),
     FAILED_TOKEN_EXISTS(1007,"TOKEN不存在"),
     INVALID_FILE_TYPE(1008,"不符合的图片格式"),
+    FAIL_REFRESH_TOKEN(1009,"无效的刷新请求 (缺少凭证)"),
 
     AILED_USER_EXISTS (1101, "用户已存在"),
     FAILED_USER_NOT_EXISTS (1102, "用户不存在"),

@@ -29,7 +29,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-@CrossOrigin(origins = "http://localhost:5173")
+
 @RestController
 @RequestMapping("/article")
 @Tag(name = "帖子类",description = "帖子相关api")

@@ -2,13 +2,43 @@ spring:
   application:
     name: kc_forum
   datasource:
-    url: jdbc:mysql://127.0.0.1:3306/mybatis_test? characterEncoding=utf8&useSSL=falseallowPublicKeyRetrieval=true
+    url: jdbc:mysql://127.0.0.1:3306/kc_forum? characterEncoding=utf8&useSSL=false
     username: root
     password: Zz161011.
     driver-class-name: com.mysql.cj.jdbc.Driver
+  jackson:
+    date-format: yyyy-mm-dd HH:mm:ss #格式化日期
+    default-property-inclusion: non_null #为null的时候不格式化
+  mail:
+    host: smtp.qq.com
+    port: 465
+    username: 1624475081@qq.com
+    password: gyfiybzapiamjfdf
+    protocol: smtp
+    properties: # 下面要用properties的写法才可以生效
+      mail.smtp.auth: true
+      mail.smtp.ssl.enable: true  # 启用SSL
+      mail.smtp.socketFactory.class: javax.net.ssl.SSLSocketFactory
+    #      mail.debug: true  # 开启调试日志
+    default-encoding: utf-8
+
 server:
   port: 58080
-mybatis-plus:
-  configuration: # 配置打印 MyBatis⽇志
-    map-underscore-to-camel-case: true #格式转化
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+#mybatis-plus:
+#  configuration: # 配置打印 MyBatis⽇志
+#    map-underscore-to-camel-case: true #格式转化
+#    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+logging:
+  pattern:
+    dateformat: yyyy-MM-dd HH:mm:ss
+  level:
+    root: info #日志默认级别
+#    com.doublez.kc_forum: debug #指定包下的日志级别
+  file:
+    path: /var/log/kc_forum #日志保存路径
+
+upload:
+  avatar-base-path: var/kc_forum/upload # 头像存储的基础路径
+  avatar-base-url: http://localhost:58080/avatars # 头像访问的基础URL
+  base-path: var/kc_forum/upload
+  base-url: http://localhost:58080

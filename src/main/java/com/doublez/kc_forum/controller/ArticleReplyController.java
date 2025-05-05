@@ -16,13 +16,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-@CrossOrigin(origins = "http://localhost:5173")
+
 @Slf4j
 @RestController
 @RequestMapping("/articleReply")
@@ -46,6 +47,7 @@ public class ArticleReplyController {
         Long userId = JwtUtil.getUserId(request);
         User user = userService.selectUserInfoById(userId);
         AuthUtils.userBannedChecker(user);
+        articleReplyAddRequest.setReplyUserId(userId);
 
         articleReplyServiceImpl.createArticleReply(articleReplyAddRequest);
 
@@ -65,9 +67,12 @@ public class ArticleReplyController {
 
     @PostMapping("/deleteArticleReply")
     @Operation(summary = "删除回复帖子")
-    public void deleteArticleReply(@Parameter(name = "articleId") Long articleReplyId) {
+    public void deleteArticleReply(HttpServletRequest request,
+                                   @NotNull @Parameter(name = "回复帖子id") Long articleReplyId,
+                                   @NotNull @Parameter(name = "帖子id") Long articleId) {
         if(articleReplyId != null && articleReplyId > 0) {
-            if(articleReplyServiceImpl.deleteArticleReply(articleReplyId) != 1){
+            Long userId = JwtUtil.getUserId(request);
+            if(articleReplyServiceImpl.deleteArticleReply(userId,articleReplyId,articleId) != 1){
                 throw new ApplicationException(Result.failed(ResultCode.FAILED_REPLY_DELETE));
             }
         }
