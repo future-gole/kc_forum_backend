@@ -1,8 +1,11 @@
 package com.doublez.kc_forum.common.interceptor;
 
 
+import com.doublez.kc_forum.common.Result;
+import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.utiles.JwtUtil;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +19,12 @@ import java.util.Enumeration;
 @Component
 @Slf4j
 public class Interceptor implements HandlerInterceptor {
+
+    private ObjectMapper objectMapper;
+
+    public Interceptor(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     /**
      * 使用AOP判断是否为非法登陆，其他地方就不用判断了
@@ -73,6 +82,8 @@ public class Interceptor implements HandlerInterceptor {
     private void setUnauthorizedResponse(HttpServletResponse response, String message) throws Exception {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write(String.format("{\"code\": %d, \"message\": \"%s\"}", HttpServletResponse.SC_UNAUTHORIZED, message));
+        Result<Object> errorResult =  new Result<>(ResultCode.FAILED_FORBIDDEN.getCode(), message);
+        String json = objectMapper.writeValueAsString(errorResult);
+        response.getWriter().write(json);
     }
 }

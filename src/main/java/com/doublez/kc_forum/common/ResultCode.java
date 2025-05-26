@@ -18,7 +18,7 @@ public enum ResultCode {
     INVALID_FILE_TYPE(1008,"不符合的图片格式"),
     FAIL_REFRESH_TOKEN(1009,"无效的刷新请求 (缺少凭证)"),
 
-    AILED_USER_EXISTS (1101, "用户已存在"),
+    FAILED_USER_EXISTS (1101, "用户已存在"),
     FAILED_USER_NOT_EXISTS (1102, "用户不存在"),
     FAILED_LOGIN (1103, "用户名或密码错误"),
     FAILED_USER_BANNED (1104, "您已被禁⾔, 请联系管理员."),
@@ -44,7 +44,12 @@ public enum ResultCode {
     ERROR_VERIFICATION_CODE_INCORRECT(5003, "验证码错误"),
     ERROR_VERIFICATION_CODE_EXPIRED(5004, "验证码已过期"),
     ERROR_EMAIL_NOT_VERIFIED(5005, "邮箱未验证"),
-    ERROR_EMAIL_NOT_FOUND(5006, "邮箱不存在");
+    ERROR_EMAIL_NOT_FOUND(5006, "邮箱不存在"),
+
+    ERROR_MESSAGE_NOT_VALID(6001,"消息不合法"),
+    FAILED_MESSAGE_INSERT(6001,"消息创建失败"),
+
+    FAILED_DELETE_IMAGE(7001,"删除图片失败");
 
     //状态码
     final int  code;

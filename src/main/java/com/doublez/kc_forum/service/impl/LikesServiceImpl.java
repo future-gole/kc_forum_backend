@@ -43,7 +43,7 @@ public class LikesServiceImpl implements ILikesService {
         if (existingLike != null) {
             throw new ApplicationException(Result.failed(ResultCode.FAILED_CHANGE_LIKE));
         }
-
+        //todo检查文章和回复是否有效
         // 2. 插入点赞记录
         Likes like = new Likes();
         like.setUserId(userId);

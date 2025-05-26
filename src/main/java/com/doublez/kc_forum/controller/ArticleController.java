@@ -22,7 +22,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
-import lombok.val;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
@@ -68,7 +67,7 @@ public class ArticleController {
         BeanUtils.copyProperties(articleAddRequest,article);
         //添加用户id
         article.setUserId(userId);
-        articleService.createArtical(article);
+        articleService.createArticle(article);
 
         return Result.sucess();
 
@@ -126,7 +125,7 @@ public class ArticleController {
     @PostMapping("/updateArticle")
     @Operation(summary = "根据帖子id，更新帖子",
             description = "通过request，获取当前用户id，进行鉴权和是否被禁言等判断，由前端传入updateArticleRequest对象，更新对应帖子信息")
-    public boolean UpdateArticle(HttpServletRequest request, @RequestBody @Validated UpdateArticleRequest updateArticleRequest) {
+    public boolean updateArticle(HttpServletRequest request, @RequestBody @Validated UpdateArticleRequest updateArticleRequest) {
         //简单判断
         if(updateArticleRequest.getId() < 1){
             throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
@@ -144,7 +143,7 @@ public class ArticleController {
 
     @PostMapping("/deleteArticle")
     @Operation(summary = "根据帖子id，删除对应帖子")
-    public boolean DeleteArticle(HttpServletRequest request, @Parameter(description = "帖子ID")@NotNull Long articleId) {
+    public boolean deleteArticle(HttpServletRequest request, @Parameter(description = "帖子ID")@NotNull Long articleId) {
         if(articleId == null || articleId <= 0){
             throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
         }

@@ -3,6 +3,7 @@ package com.doublez.kc_forum.common.pojo.request;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -19,6 +20,8 @@ public class ModifyUerRequest {
     @Size(max = 20,message = "昵称不能超过20")
     private String nickName;
     private String phone;
+    @NotBlank(message = "邮箱不能为空")
+    @Email
     private String email;
     private Integer gender;
     private String remark;

@@ -6,17 +6,17 @@ import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
 import com.doublez.kc_forum.model.User;
-import com.doublez.kc_forum.service.impl.UserServiceImpl;
+
 
 import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
+
 import org.springframework.stereotype.Component;
 
 import java.util.function.Function;
 
 @Slf4j
-@Component
+
 public class AuthUtils {
 
     //无权限
@@ -26,7 +26,7 @@ public class AuthUtils {
 
         // 权限校验
         if (!userId.equals(ownerId)) {
-            log.warn(ResultCode.FAILED_UNAUTHORIZED.toString() + "id: {}", userId);
+            log.warn(ResultCode.FAILED_UNAUTHORIZED.toString() + "userId: {}  resourceId: {} Expected ownerId: {}", userId, resourceId, ownerId);
             throw new ApplicationException(Result.failed(ResultCode.FAILED_UNAUTHORIZED));
         }
         return true;

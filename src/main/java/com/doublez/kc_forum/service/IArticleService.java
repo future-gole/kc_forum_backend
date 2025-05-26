@@ -21,7 +21,7 @@ public interface IArticleService {
      * @return
      */
     @Transactional
-    public void createArtical(Article article);
+    public void createArticle(Article article);
 
     /**
      * 通过boardid查询其board下的所以article

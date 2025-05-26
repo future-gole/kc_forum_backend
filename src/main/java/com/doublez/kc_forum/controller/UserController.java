@@ -27,6 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -44,12 +45,9 @@ public class UserController {
     @Autowired
     private UserServiceImpl userService;
 
-
-
-
     @PostMapping("/uploadAvatar")
     @Operation(summary = "上传用户头像", description = "上传用户头像并更新用户信息的avatarUrl")
-    public Result<String> uploadAvatar(HttpServletRequest request, @RequestParam("file") MultipartFile file) {
+    public Result<String> uploadAvatar(HttpServletRequest request, @Validated @RequestParam("file") MultipartFile file) {
         // 获取当前用户id
         Long userId = JwtUtil.getUserId(request);
         log.info("用户 {} 上传头像", userId);
@@ -191,7 +189,7 @@ public class UserController {
 
     @PostMapping("/modifyEmail")
     @Operation(summary = "修改用户邮箱")
-    public Result modifyInfoPassword(HttpServletRequest request,@Email String email) {
+    public Result<?> modifyInfoPassword(HttpServletRequest request,@NotBlank @Email String email) {
 
         //获取当前用户id
         Long userId = JwtUtil.getUserId(request);

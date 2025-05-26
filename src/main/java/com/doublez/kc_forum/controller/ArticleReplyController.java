@@ -5,7 +5,6 @@ import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
 import com.doublez.kc_forum.common.pojo.request.ArticleReplyAddRequest;
 import com.doublez.kc_forum.common.pojo.response.ViewArticleReplyResponse;
-import com.doublez.kc_forum.common.pojo.response.ViewArticlesResponse;
 import com.doublez.kc_forum.common.utiles.AuthUtils;
 import com.doublez.kc_forum.common.utiles.JwtUtil;
 import com.doublez.kc_forum.mapper.ArticleMapper;
@@ -70,11 +69,11 @@ public class ArticleReplyController {
     public void deleteArticleReply(HttpServletRequest request,
                                    @NotNull @Parameter(name = "回复帖子id") Long articleReplyId,
                                    @NotNull @Parameter(name = "帖子id") Long articleId) {
-        if(articleReplyId != null && articleReplyId > 0) {
+        if(articleReplyId > 0) {
             Long userId = JwtUtil.getUserId(request);
             if(articleReplyServiceImpl.deleteArticleReply(userId,articleReplyId,articleId) != 1){
                 throw new ApplicationException(Result.failed(ResultCode.FAILED_REPLY_DELETE));
             }
-        }
+        }else throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
     }
 }

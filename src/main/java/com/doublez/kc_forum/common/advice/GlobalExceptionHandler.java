@@ -27,56 +27,59 @@ import java.util.Map;
 @ControllerAdvice
 @ResponseBody
 @Slf4j
-@Data
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApplicationException.class)
-    public Result applicationExceptionHandler(ApplicationException e) {
-        //打印堆栈信息
-        e.printStackTrace();//生产环境需要去掉
-        //打印日志
-        log.error(e.getMessage());
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public Result<?> applicationExceptionHandler(ApplicationException e) {
+        //打印堆栈信息日志
+        log.error(e.getMessage(),e);
         if(e.getErrResult() != null){
             return e.getErrResult();
         }
-        //非空校验
-        if(e.getMessage() == null || "".equals(e.getMessage())){
-            return Result.failed(ResultCode.ERROR_SERVICES);
-        }
-        //返回异常信息
-        return Result.failed(e.getMessage());
+        return Result.failed(ResultCode.ERROR_SERVICES);
+    }
+
+    /**
+     * 处理资源未找到异常 (Spring 6+ for static resources, or if throwExceptionIfNoHandlerFound=true)
+     * 如果你希望404也返回统一JSON格式
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Result<?> noResourceFoundExceptionHandler(NoResourceFoundException e) {
+        log.warn("NoResourceFoundException caught: Resource not found for request URL '{}'", e.getResourcePath());
+        return Result.failed(ResultCode.FAILED_NOT_EXISTS);
     }
 
     @ExceptionHandler(Exception.class)
-    public Result exceptionHandler(Exception e) throws NoResourceFoundException {
-        // 排除资源未找到的异常
-        if (e instanceof NoResourceFoundException) {
-            throw (NoResourceFoundException) e; // 重新抛出，让 Spring 的默认处理器处理
-        }
-        e.printStackTrace();//生产环境需要去掉
-        log.error(e.getMessage());
-
-        if(e.getMessage() == null || "".equals(e.getMessage())){
-            return Result.failed(ResultCode.ERROR_SERVICES);
-        }
-        //返回异常信息
-        return Result.failed(e.getMessage());
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public Result<?> globalExceptionHandler(Exception e) {
+        // 对于未被特定处理器捕获的任何其他异常
+        log.error("Unhandled Exception caught: {}", e.getMessage(), e);
+        // 不应将 e.getMessage() 直接暴露给用户，因为它可能包含敏感信息或技术细节
+        // return Result.failed(ResultCode.ERROR_SERVICES);
+        return Result.failed(ResultCode.ERROR_SERVICES); // 或者使用ResultCode
     }
 
+    /**
+     * 处理HTTP消息不可读异常 HttpMessageNotReadableException
+     * 例如，请求体JSON格式错误
+     */
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public Result HttpMessageNotReadableExceptionHandler(HttpMessageNotReadableException e) {
-        log.error(ResultCode.FAILED_PARAMS_VALIDATE.getMessage() + e.getMessage());
+    public Result<?> HttpMessageNotReadableExceptionHandler(HttpMessageNotReadableException e) {
+        log.warn("Http message not readable exception: {}",e.getMessage(),e);
 
-        if(e.getMessage() == null || "".equals(e.getMessage())){
-            return Result.failed(ResultCode.FAILED_PARAMS_VALIDATE);
-        }
-        return Result.failed(e.getMessage());
+        return Result.failed(ResultCode.FAILED_PARAMS_VALIDATE);
     }
 
-    //类型转化异常
+    /**
+     * 处理参数校验异常 MethodArgumentNotValidException
+     * 通常由 @Valid 注解触发
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Result<Map<String, String>>> handleValidationExceptions(MethodArgumentNotValidException ex) {
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Result<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
         BindingResult bindingResult = ex.getBindingResult();
         List<FieldError> fieldErrors = bindingResult.getFieldErrors();
 
@@ -84,8 +87,7 @@ public class GlobalExceptionHandler {
         for (FieldError error : fieldErrors) {
             errors.put(error.getField(), error.getDefaultMessage()); // 获取 default message
         }
-        //用result进行包装，防止ResponseAdvice又包装一遍
-        Result<Map<String, String>> result = new Result<>(ResultCode.FAILED_PARAMS_VALIDATE.getCode(), ResultCode.FAILED_PARAMS_VALIDATE.getMessage(), errors);
-        return new ResponseEntity<>(result, HttpStatus.BAD_REQUEST);
+        // 使用 ResultCode.FAILED_PARAMS_VALIDATE 来提供统一的code和message
+        return new Result<>(ResultCode.FAILED_PARAMS_VALIDATE.getCode(), ResultCode.FAILED_PARAMS_VALIDATE.getMessage(), errors);
     }
 }

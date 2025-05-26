@@ -29,6 +29,15 @@ import java.util.Random;
 @Service
 @Slf4j
 public class EmailServiceImpl implements IemailService {
+    /**
+     * 建议 for EmailServiceImpl.java:
+     * 文件名和类名: IemailService -> IEmailService。
+     * HTML邮件内容: 使用模板引擎替代硬编码的HTML字符串。
+     * 发送频率限制: 在 sendVerificationCode 中添加发送频率限制。
+     * 验证码一次性使用: 在 verifyEmail 方法中，验证码成功使用后应使其失效（例如删除记录或标记为已使用），防止重复验证。
+     * existEmail 的使用: 根据业务需求（例如注册时检查邮箱是否已存在），决定是否在 sendVerificationCode 中启用 existEmail 检查。如果启用了，并且 existEmail 返回 true (邮箱已注册)，那么 sendVerificationCode 应该返回一个表示邮箱已注册的 Result (例如 Result.failed(ResultCode.ERROR_EMAIL_ALREADY_REGISTERED))。
+     * 时区: 考虑 clearExpiredVerificationCodes 中的时区问题。
+     */
     @Resource
     private JavaMailSender mailSender;
 

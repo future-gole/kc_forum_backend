@@ -16,13 +16,13 @@ public interface IUserService {
 
 
     String uploadAvatar(Long userId, MultipartFile file);
-    public User selectUserInfoByUserName(String email);
+    User selectUserInfoByUserName(String email);
 
-    public Result createNormalUser(RegisterRequest registerRequest);
+    Result createNormalUser(RegisterRequest registerRequest);
 
-    public UserLoginResponse login(UserLoginRequest loginRequest, HttpServletResponse response);
+    UserLoginResponse login(UserLoginRequest loginRequest, HttpServletResponse response);
 
-    public User selectUserInfoById(Long id);
+    User selectUserInfoById(Long id);
 
     /**
      * 更新用户发帖数目
@@ -36,10 +36,10 @@ public interface IUserService {
      * @return Map<Long, User>
      */
     Map<Long, User> selectUserInfoByIds(List<Long> userIds);
-    @Transactional
+
     boolean   modifyUserInfoById(User user);
-    @Transactional
+
     void modifyUserInfoPasswordById(String password, Long id);
-    @Transactional
-    Result modifyUserInfoEmailById(String email,Long id);
+
+    Result<?> modifyUserInfoEmailById(String email,Long id);
 }

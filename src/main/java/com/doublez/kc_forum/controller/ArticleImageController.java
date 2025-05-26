@@ -1,6 +1,7 @@
 package com.doublez.kc_forum.controller;
 
 import com.doublez.kc_forum.common.Result;
+import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.pojo.response.ImageUploadResponseDTO;
 import com.doublez.kc_forum.common.utiles.JwtUtil;
 import com.doublez.kc_forum.service.impl.ArticleImageServiceImpl;
@@ -64,7 +65,7 @@ public class ArticleImageController {
         if (success) {
             return Result.sucess();
         } else {
-            return Result.failed("删除图片失败");
+            return Result.failed(ResultCode.FAILED_DELETE_IMAGE);
         }
     }
 }

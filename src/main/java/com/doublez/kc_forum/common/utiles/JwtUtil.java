@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.Objects;
 
 @Slf4j
-//@Component // !! 确保此类被 Spring 扫描并作为 Bean 管理 !!
 public class JwtUtil {
 
 //    // --- 用于接收注入值的实例字段 ---
@@ -38,9 +37,10 @@ public class JwtUtil {
     private static final Key key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
 
 
-    private static final Integer expiration = 10000;
+    private static final Integer expiration = 1800000;
 
-
+    public static final String USER_ID = "Id";
+    public static final String EMAIL = "email";
 
     /**
      * 生成token
@@ -114,9 +114,9 @@ public class JwtUtil {
 
         // 3. 从 claims 中获取用户 ID
         Long userId = null;
-        if (claims != null && claims.containsKey("Id")) {
+        if (claims != null && claims.containsKey(USER_ID)) {
             try {
-                userId = Long.valueOf(claims.get("Id").toString());
+                userId = Long.valueOf(claims.get(USER_ID).toString());
             } catch (NumberFormatException e) {
                 // 处理 "id" 不是 Integer 类型的情况
                 throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
@@ -142,7 +142,7 @@ public class JwtUtil {
         // 不需要捕捉 Exception，因为 parseToken 内部已处理
 
         // 从 Claims 中获取用户 ID
-        Object emailObject = claims.get("email");
+        Object emailObject = claims.get(EMAIL);
         if (emailObject == null) {
             log.error("Token Claims 中缺少 'email' 字段. Claims: {}", claims);
             throw new ApplicationException(Result.failed(ResultCode.FAILED_CHECK_USERID)); // 使用你定义的枚举

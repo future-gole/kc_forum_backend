@@ -9,7 +9,7 @@ import com.doublez.kc_forum.common.pojo.request.UpdateArticleRequest;
 import com.doublez.kc_forum.common.pojo.response.ArticleDetailResponse;
 import com.doublez.kc_forum.common.pojo.response.UserArticleResponse;
 import com.doublez.kc_forum.common.pojo.response.ViewArticlesResponse;
-import com.doublez.kc_forum.common.utiles.IsEmptyClass;
+import com.doublez.kc_forum.common.utiles.AssertUtil;
 import com.doublez.kc_forum.mapper.ArticleMapper;
 import com.doublez.kc_forum.model.Article;
 import com.doublez.kc_forum.model.Board;
@@ -54,7 +54,7 @@ public class ArticleServiceImpl implements IArticleService {
 
     @Transactional
     @Override
-    public void createArtical(Article article) {
+    public void createArticle(Article article) {
         //非空校验
         if(article == null || article.getUserId() == null
                 || article.getBoardId() == null
@@ -136,7 +136,7 @@ public class ArticleServiceImpl implements IArticleService {
         List<ViewArticlesResponse> viewArticlesResponse = articles.stream().map(article -> {
             User user = userMap.get(article.getUserId());
             //判断用户是否存在
-            IsEmptyClass.Empty(user,ResultCode.FAILED_USER_NOT_EXISTS,article.getId());
+            AssertUtil.checkClassNotNull(user,ResultCode.FAILED_USER_NOT_EXISTS,article.getId());
 
             UserArticleResponse userArticleResponse = copyProperties(user, UserArticleResponse.class);
             ViewArticlesResponse viewArticleResponse = copyProperties(article, ViewArticlesResponse.class);
@@ -156,11 +156,11 @@ public class ArticleServiceImpl implements IArticleService {
         Article article = articleMapper.selectOne(new LambdaQueryWrapper<Article>().eq(Article::getId,id)
                 .eq(Article::getDeleteState, 0).eq(Article::getState, 0));
 
-        IsEmptyClass.Empty(article,ResultCode.FAILED_ARTICLE_NOT_EXISTS,id);
+        AssertUtil.checkClassNotNull(article,ResultCode.FAILED_ARTICLE_NOT_EXISTS,id);
         //查询user
         User user = userServiceImpl.selectUserInfoById(article.getUserId());
 
-        IsEmptyClass.Empty(user,ResultCode.FAILED_USER_NOT_EXISTS,article.getUserId());
+        AssertUtil.checkClassNotNull(user,ResultCode.FAILED_USER_NOT_EXISTS,article.getUserId());
 
         //组装
         UserArticleResponse userArticleResponse =copyProperties(user, UserArticleResponse.class);

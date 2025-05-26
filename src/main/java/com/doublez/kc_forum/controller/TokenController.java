@@ -72,9 +72,9 @@ public class TokenController {
 
                     // e. !! 设置新的 Refresh Token 到 HttpOnly Cookie !!
                     Cookie newRefreshTokenCookie = new Cookie("refreshToken", newRefreshTokenString);
-                    newRefreshTokenCookie.setHttpOnly(true);
-                    newRefreshTokenCookie.setSecure(true); // 生产环境 true
-                    newRefreshTokenCookie.setPath("/api/token"); // 与登录时设置的路径一致
+//                    newRefreshTokenCookie.setHttpOnly(true);
+//                    newRefreshTokenCookie.setSecure(true); // 生产环境 true
+//                    newRefreshTokenCookie.setPath("/api/token"); // 与登录时设置的路径一致
                     newRefreshTokenCookie.setMaxAge((int) (newRefreshTokenExpirationMillis / 1000));
                     // ... 其他 Cookie 属性 (Domain, SameSite) ...
                     response.addCookie(newRefreshTokenCookie);

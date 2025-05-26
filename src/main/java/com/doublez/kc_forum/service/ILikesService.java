@@ -20,4 +20,5 @@ public interface ILikesService {
     void unlike(Long userId, Long targetId, String targetType);
 
     boolean checkLike(Long userId, Long targetId, String targetType);
+
 }

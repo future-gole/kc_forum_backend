@@ -8,7 +8,7 @@ import com.doublez.kc_forum.common.exception.ApplicationException;
 import com.doublez.kc_forum.common.pojo.request.ArticleReplyAddRequest;
 import com.doublez.kc_forum.common.pojo.response.UserArticleResponse;
 import com.doublez.kc_forum.common.pojo.response.ViewArticleReplyResponse;
-import com.doublez.kc_forum.common.utiles.IsEmptyClass;
+import com.doublez.kc_forum.common.utiles.AssertUtil;
 import com.doublez.kc_forum.mapper.ArticleMapper;
 import com.doublez.kc_forum.mapper.ArticleReplyMapper;
 import com.doublez.kc_forum.model.Article;
@@ -25,7 +25,6 @@ import org.springframework.util.StringUtils;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -40,6 +39,7 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
     @Autowired
     private ArticleMapper articleMapper;
     @Override
+    @Transactional
     public void createArticleReply(ArticleReplyAddRequest articleReplyAddRequest) {
         if(articleReplyAddRequest == null || articleReplyAddRequest.getArticleId() == null
                 || articleReplyAddRequest.getPostUserId() == null || articleReplyAddRequest.getReplyUserId() == null
@@ -104,7 +104,7 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
         List<ViewArticleReplyResponse> viewArticleReplysResponse = articleReplies.stream().map(articleReply -> {
             User user = userMap.get(articleReply.getReplyUserId());
             //判断用户是否存在
-            IsEmptyClass.Empty(user,ResultCode.FAILED_USER_NOT_EXISTS,articleReply.getArticleId());
+            AssertUtil.checkClassNotNull(user,ResultCode.FAILED_USER_NOT_EXISTS,articleReply.getArticleId());
 
             UserArticleResponse userArticleResponse = copyProperties(user,UserArticleResponse.class);
             ViewArticleReplyResponse viewArticleReplyResponse = copyProperties(articleReply, ViewArticleReplyResponse.class);
@@ -123,15 +123,15 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
                 .eq(ArticleReply::getId,targetId)
                 .eq(ArticleReply::getDeleteState,0)
                 .eq(ArticleReply::getState,0)
-                .setSql("like_count = like_count + " + increment));
+                .setSql("lirke_count = like_count + " + increment));
     }
 
     @Transactional
     @Override
-    public int deleteArticleReply(Long useId,Long articleReplyId,Long articleId) {
+    public int deleteArticleReply(Long userId,Long articleReplyId,Long articleId) {
         int row = articleReplyMapper.update(new LambdaUpdateWrapper<ArticleReply>()
                 .set(ArticleReply::getDeleteState,1)
-                .eq(ArticleReply::getReplyUserId,useId)
+                .eq(ArticleReply::getReplyUserId,userId)
                 .eq(ArticleReply::getArticleId,articleId)
                 .eq(ArticleReply::getId,articleReplyId));
         if(row != 1) {

@@ -35,8 +35,7 @@ public class ProactiveTokenRefreshInterceptor implements HandlerInterceptor {
      * 或者将这部分逻辑合并到你的认证拦截器 preHandle 的成功路径中。
      * 这里假设认证拦截器已将 Claims 存入 attribute。
      *
-     * 如果你的认证拦截器没有存 Claims，你需要在这里重新解析一次 Token，
-     * 但要注意处理 ExpiredJwtException (此时不应执行 postHandle 逻辑)。
+     * 检查 Access Token 是否接近过期，如果是，生成新 Token 并放入响应头。
      *
      * @return true 继续执行，false 中断
      */
@@ -45,7 +44,7 @@ public class ProactiveTokenRefreshInterceptor implements HandlerInterceptor {
         // 如果是 OPTIONS 请求 (CORS 预检)，直接放行
         if (HttpMethod.OPTIONS.matches(request.getMethod())) {
             response.setStatus(HttpServletResponse.SC_OK); // 可以明确设置状态码为 200 OK
-            return true; // 或者直接 return true 让后续的 CORS 配置处理
+            return true;
         }
 
         // 检查是否配置了有效的刷新阈值
@@ -54,8 +53,9 @@ public class ProactiveTokenRefreshInterceptor implements HandlerInterceptor {
         }
 
         String authorizationHeader = request.getHeader("Authorization");
+        //获取token
         String token = authorizationHeader.substring(7);
-
+        //获取Claims
         Claims claims = JwtUtil.parseToken(token);
 
         // 只有当 Claims 存在时才进行处理 (意味着 preHandle 验证通过且 Token 未过期)
@@ -67,6 +67,7 @@ public class ProactiveTokenRefreshInterceptor implements HandlerInterceptor {
 
                 // 判断剩余时间是否小于等于阈值，并且大于 0 (确保 Token 仍然有效)
                 if (remainingMillis > 0 && remainingMillis <= proactiveRefreshThresholdMs) {
+                    //取出原token中的信息
                     String email = String.valueOf(claims.get("email").toString());
                     try {
                         //放入载荷
@@ -77,7 +78,7 @@ public class ProactiveTokenRefreshInterceptor implements HandlerInterceptor {
                         //构建新的token
                         String newAccessToken = JwtUtil.genToken(accessTokenClaims);
 
-                        // *** 修改点：将新 Token 存入 request attribute ***
+                        //  修改点：将新 Token 存入 request attribute
                         request.setAttribute(NEW_ACCESS_TOKEN_ATTRIBUTE, newAccessToken);
                         log.info("Attribute '{}' 确认已设置到 request 对象", NEW_ACCESS_TOKEN_ATTRIBUTE); // 添加确认日志
 
@@ -88,26 +89,9 @@ public class ProactiveTokenRefreshInterceptor implements HandlerInterceptor {
                     }
                 }
             } else {
-                log.warn("在 postHandle 中获取到的 Claims 没有过期时间，无法进行主动刷新判断。");
+                log.warn("在 preHandle 中获取到的 Claims 没有过期时间，无法进行主动刷新判断。");
             }
         }
         return true; // 默认放行，让 postHandle 处理
-    }
-
-    /**
-     * 在 Controller 方法成功执行后，响应提交前执行。
-     * 检查 Access Token 是否接近过期，如果是，生成新 Token 并放入响应头。
-     */
-    @Override
-    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) throws Exception {
-
-    }
-
-    /**
-     * 在整个请求处理完毕后执行，用于清理资源等。这里不需要特别处理。
-     */
-    @Override
-    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
-        // 清理操作 (如果需要)
     }
 }

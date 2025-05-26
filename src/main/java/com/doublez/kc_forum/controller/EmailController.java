@@ -4,7 +4,6 @@ import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.service.impl.EmailServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.Size;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -13,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/email")
 @RestController
 @Slf4j
-public class emailController {
+public class EmailController {
     @Autowired
     private EmailServiceImpl emailService;
     @PostMapping("/sendVerificationCode")

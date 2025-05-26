@@ -32,15 +32,8 @@ public class ResponseAdvice implements ResponseBodyAdvice<Object> {
         if (requestAttributes != null) {
             String path = requestAttributes.getRequest().getRequestURI();
             // 稍微优化一下路径检查
-            if (path.startsWith("/v3/api-docs") || path.startsWith("/swagger-ui")) {
-                return false;
-            }
+            return !path.startsWith("/v3/api-docs") && !path.startsWith("/swagger-ui");
         }
-
-        // 排除已经是 Result 类型的返回值 (保持不变)
-        // 注意：这里不再需要排除 Result，因为我们需要修改它！
-        // return !returnType.getParameterType().equals(Result.class);
-        // 我们需要处理所有可能需要包装或已经是 Result 的情况
         return true; // 让 beforeBodyWrite 处理所有情况
     }
 
@@ -50,23 +43,23 @@ public class ResponseAdvice implements ResponseBodyAdvice<Object> {
                                   Class<? extends HttpMessageConverter<?>> selectedConverterType,
                                   ServerHttpRequest request, ServerHttpResponse response) {
 
-        // *** 获取 HttpServletRequest ***
+        // 获取 HttpServletRequest
         HttpServletRequest servletRequest = ((ServletServerHttpRequest) request).getServletRequest();
-        // *** 尝试获取新 Token ***
+        // 尝试获取新 Token
         Object newTokenAttr = servletRequest.getAttribute(ProactiveTokenRefreshInterceptor.NEW_ACCESS_TOKEN_ATTRIBUTE);
 
         String newAccessToken = (newTokenAttr instanceof String) ? (String) newTokenAttr : null;
 
-        // *** 处理最终要返回的 Result 对象 ***
+        // 处理最终要返回的 Result 对象
         Result<?> finalResult; // 用来存储最终要返回的 Result 对象
 
         // 1. 如果 body 本身就是 Result 类型
         if (body instanceof Result<?>) {
             finalResult = (Result<?>) body;
         }
-        // 2. 如果 body 是 null (或者根据你的业务，null 也应该包装)
+        // 2. 如果 body 是 null
         else if (body == null && !returnType.getParameterType().equals(void.class)) { // 避免包装 void 返回类型
-            finalResult = Result.sucess(); // 或者 Result.failed() 根据你的定义
+            finalResult = Result.sucess(); 
         }
         // 3. 如果 body 是 String
         else if (body instanceof String) {
@@ -84,13 +77,10 @@ public class ResponseAdvice implements ResponseBodyAdvice<Object> {
             finalResult = Result.sucess(body); // 假设默认包装为成功
         }
 
-        // *** 将新 Token 设置到最终的 Result 对象中 (如果存在) ***
+        //  将新 Token 设置到最终的 Result 对象中 (如果存在)
         if (newAccessToken != null && finalResult != null) {
             finalResult.setNewAccessToken(newAccessToken);
-            // (可选) 清除标记，避免潜在的重复处理（一般不需要）
-            // servletRequest.removeAttribute(ProactiveTokenRefreshInterceptor.NEW_ACCESS_TOKEN_ATTRIBUTE);
         }
-
         return finalResult; // 返回处理过的 Result 对象
     }
 }

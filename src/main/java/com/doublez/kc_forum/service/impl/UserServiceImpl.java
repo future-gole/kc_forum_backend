@@ -211,8 +211,8 @@ public class UserServiceImpl implements IUserService {
         // --- !! 设置 Refresh Token 到 HttpOnly Cookie !! ---
         Cookie refreshTokenCookie = new Cookie("refreshToken", refreshTokenString); // Cookie 名称为 "refreshToken"
         refreshTokenCookie.setHttpOnly(true); // !! 关键：设置为 HttpOnly !!
-        refreshTokenCookie.setSecure(true); // !! 关键：仅在 HTTPS 下传输 (生产环境必须 true) !!
-        refreshTokenCookie.setPath("/api/token"); // !! 关键：设置 Cookie 的路径，通常是刷新接口的路径或更上层路径 !!
+//        refreshTokenCookie.setSecure(true); // !! 关键：仅在 HTTPS 下传输 (生产环境必须 true) !!
+//        refreshTokenCookie.setPath("/api/token"); // !! 关键：设置 Cookie 的路径，通常是刷新接口的路径或更上层路径 !!
         refreshTokenCookie.setMaxAge((int) (refreshTokenExpirationMillis / 1000)); // 设置 Cookie 过期时间 (秒)
         // refreshTokenCookie.setDomain("yourdomain.com"); // (可选) 生产环境设置域名
         // SameSite 策略: Strict 最严格，Lax 常用平衡点。防止 CSRF。
@@ -287,16 +287,14 @@ public class UserServiceImpl implements IUserService {
 
     @Transactional
     @Override
-    public boolean  modifyUserInfoById(User user) {
+    public boolean modifyUserInfoById(User user) {
         if(user == null || user.getEmail() == null){
             log.warn(ResultCode.FAILED_USER_NOT_EXISTS.toString());
 
             return false;
         }
-        //用邮箱作为唯一校验？？？
-        if(userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .select(User::getId)
-                .eq(User::getEmail,user.getEmail())) == null){
+        if(userMapper.selectCount(new LambdaQueryWrapper<User>()
+                .eq(User::getId,user.getId())) == null){
             throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
         }
         //。。。补充完整校验
@@ -334,7 +332,7 @@ public class UserServiceImpl implements IUserService {
     }
     @Transactional
     @Override
-    public Result modifyUserInfoEmailById(String email, Long id) {
+    public Result<?> modifyUserInfoEmailById(String email, Long id) {
         //判断
         if(id == null || id <= 0){
             throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
@@ -347,7 +345,7 @@ public class UserServiceImpl implements IUserService {
         if (verification == null || !verification.getVerified()) {
             return Result.failed(ResultCode.ERROR_EMAIL_NOT_VERIFIED);
         }
-
+        //todo需要检查邮箱是否被占用
         if(userMapper.update(new LambdaUpdateWrapper<User>()
                 .set(User::getEmail,email)
                 .eq(User::getId,id)
