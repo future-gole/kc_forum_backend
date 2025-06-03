@@ -17,18 +17,17 @@ public class EmailController {
     private EmailServiceImpl emailService;
     @PostMapping("/sendVerificationCode")
     @Operation(summary = "发送邮箱验证码")
-    public Result sendVerificationCode(@RequestParam @Email String email) {
+    public Result<?> sendVerificationCode(@RequestParam @Email String email) {
         log.info("发送验证码到邮箱: {}", email);
-        emailService.sendVerificationCode(email);
-        return Result.sucess();
+        return emailService.sendVerificationCode(email);
     }
 
     @PostMapping("/verifyEmail")
     @Operation(summary = "验证邮箱")
-    public Result verifyEmail(@RequestParam @Email String email,
+    public Result<?> verifyEmail(@RequestParam @Email String email,
                               @RequestParam String code) {
         log.info("验证邮箱: {}", email);
          emailService.verifyEmail(email, code);
-         return Result.sucess();
+         return Result.success();
     }
 }

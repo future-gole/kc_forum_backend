@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.exception.BusinessException;
+import com.doublez.kc_forum.common.exception.SystemException;
 import com.doublez.kc_forum.common.pojo.request.ArticleReplyAddRequest;
 import com.doublez.kc_forum.common.pojo.response.UserArticleResponse;
 import com.doublez.kc_forum.common.pojo.response.ViewArticleReplyResponse;
@@ -41,11 +43,11 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
     @Override
     @Transactional
     public void createArticleReply(ArticleReplyAddRequest articleReplyAddRequest) {
-        if(articleReplyAddRequest == null || articleReplyAddRequest.getArticleId() == null
-                || articleReplyAddRequest.getPostUserId() == null || articleReplyAddRequest.getReplyUserId() == null
+        //todo replyUserId  replyId
+        if(articleReplyAddRequest.getPostUserId() <= 0
                 || articleReplyAddRequest.getArticleId() <= 0
                 || !StringUtils.hasText(articleReplyAddRequest.getContent())) {
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
         }
 
         //判断帖子是否正常
@@ -53,19 +55,19 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
                 .eq(Article::getId,articleReplyAddRequest.getArticleId()));
 
         if(article == null) {
-            log.error(ResultCode.FAILED_ARTICLE_NOT_EXISTS.toString());
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_NOT_EXISTS));//帖子不存在
+            log.warn(ResultCode.FAILED_ARTICLE_NOT_EXISTS.toString());
+            throw new BusinessException(ResultCode.FAILED_ARTICLE_NOT_EXISTS);//帖子不存在
         }
         if( article.getDeleteState() == 1 || article.getState() == 1) {
-            log.info(ResultCode.FAILED_ARTICLE_BANNED.toString());
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_BANNED));//被删除或者禁言
+            log.warn(ResultCode.FAILED_ARTICLE_BANNED.toString());
+            throw new BusinessException(ResultCode.FAILED_ARTICLE_BANNED);//被删除或者禁言
         }
         //类型转化
         ArticleReply articleReply = copyProperties(articleReplyAddRequest,ArticleReply.class);
         //插入articleReply
         if(articleReplyMapper.insert(articleReply) != 1) {
             log.error(ResultCode.FAILED_CREATE.toString());
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_CREATE));
+            throw new SystemException(ResultCode.FAILED_CREATE);
         }
 
         //更新帖子回复数量+1
@@ -89,7 +91,7 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
                 .eq(ArticleReply::getArticleId, articleId));
         //为空返回
         if (articleReplies == null || articleReplies.isEmpty()) {
-            log.info("回复贴为空");
+            log.info("回复贴为空,articleId: {}", articleId);
             return Collections.emptyList();
         }
         //2. 提取所有 userId
@@ -123,7 +125,7 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
                 .eq(ArticleReply::getId,targetId)
                 .eq(ArticleReply::getDeleteState,0)
                 .eq(ArticleReply::getState,0)
-                .setSql("lirke_count = like_count + " + increment));
+                .setSql("like_count = like_count + " + increment));
     }
 
     @Transactional
@@ -135,7 +137,7 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
                 .eq(ArticleReply::getArticleId,articleId)
                 .eq(ArticleReply::getId,articleReplyId));
         if(row != 1) {
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_DELETE));
+            throw new SystemException(ResultCode.FAILED_ARTICLE_DELETE);
         }
         log.info("回复贴删除, articleReplyId:{}",articleReplyId);
         //减少帖子数量
@@ -152,7 +154,7 @@ public class ArticleReplyServiceImpl implements IArticleReplyService{
             return target;
         } catch (Exception e) {
             log.error("类型转换失败: {} -> {}", source.getClass().getName(), targetClass.getName(), e);
-            throw new ApplicationException(Result.failed(ResultCode.ERROR_TYPE_CHANGE));
+            throw new SystemException(ResultCode.ERROR_TYPE_CHANGE);
         }
     }
 }

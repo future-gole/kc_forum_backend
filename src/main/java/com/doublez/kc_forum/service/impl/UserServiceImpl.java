@@ -4,15 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
-import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.exception.BusinessException;
+import com.doublez.kc_forum.common.exception.SystemException;
 import com.doublez.kc_forum.common.pojo.request.RegisterRequest;
 import com.doublez.kc_forum.common.pojo.request.UserLoginRequest;
 import com.doublez.kc_forum.common.pojo.response.UserLoginResponse;
 import com.doublez.kc_forum.common.utiles.JwtUtil;
 import com.doublez.kc_forum.common.utiles.SecurityUtil;
-import com.doublez.kc_forum.mapper.EmailVerificationMapper;
 import com.doublez.kc_forum.mapper.UserMapper;
-import com.doublez.kc_forum.model.EmailVerification;
 import com.doublez.kc_forum.model.User;
 import com.doublez.kc_forum.service.IUserService;
 import jakarta.servlet.http.Cookie;
@@ -31,7 +30,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -43,7 +41,7 @@ public class UserServiceImpl implements IUserService {
     private UserMapper userMapper;
 
     @Autowired
-    private EmailVerificationMapper verificationMapper;
+    private EmailServiceImpl emailServiceImpl;
 
     @Value("${upload.avatar-base-path}")
     private String avatarBasePath;
@@ -64,7 +62,8 @@ public class UserServiceImpl implements IUserService {
             String originalFilename = file.getOriginalFilename();
             String fileExtension = getFileExtension(originalFilename);
             if (!isValidImageType(fileExtension)) {
-                throw new ApplicationException(Result.failed(ResultCode.INVALID_FILE_TYPE));
+                log.warn("图片文件后缀不合法：{}",originalFilename);
+                throw new BusinessException(ResultCode.INVALID_FILE_TYPE);
             }
 
             // 2. 生成唯一文件名
@@ -112,7 +111,7 @@ public class UserServiceImpl implements IUserService {
 
         } catch (IOException e) {
             log.error("用户 {} 上传头像失败", userId, e);
-            throw new ApplicationException(Result.failed(ResultCode.UPLOAD_FAILED));
+            throw new SystemException(ResultCode.UPLOAD_AVATAR_FAILED);
         }
     }
 
@@ -133,26 +132,21 @@ public class UserServiceImpl implements IUserService {
     }
 
     @Override
-    public User selectUserInfoByUserName(String email) {
+    public User selectUserInfoByUserEmail(String email) {
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getEmail, email));
 
         if (user == null) {
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
+            throw new BusinessException(ResultCode.FAILED_USER_NOT_EXISTS);
         }
         return user;
     }
 
     @Transactional
     @Override
-    public Result createNormalUser(RegisterRequest registerRequest) {
-        //判断用户名是否存在,名字有重名的可能，可以转为邮箱
+    public Result<?> createNormalUser(RegisterRequest registerRequest) {
         // 检查邮箱验证状态
-        EmailVerification verification = verificationMapper.selectOne(new LambdaQueryWrapper<EmailVerification>()
-                .eq(EmailVerification::getEmail, registerRequest.getEmail()));
+        emailServiceImpl.verifyEmail(registerRequest.getEmail(),registerRequest.getCode());
 
-        if (verification == null || !verification.getVerified()) {
-            return Result.failed(ResultCode.ERROR_EMAIL_NOT_VERIFIED);
-        }
         //!!!!不能注入，要创建新的对象
         User user = new User();
         //密码加密
@@ -162,7 +156,7 @@ public class UserServiceImpl implements IUserService {
             BeanUtils.copyProperties(registerRequest, user);
         } catch (BeansException e) {
             log.error(ResultCode.ERROR_TYPE_CHANGE.toString());
-            throw new ApplicationException(Result.failed(ResultCode.ERROR_TYPE_CHANGE));
+            throw new BusinessException(ResultCode.ERROR_TYPE_CHANGE);
         }
 
         //新增用户默认值用代码控制
@@ -171,13 +165,13 @@ public class UserServiceImpl implements IUserService {
 
         if(result != 1) {
             //打印日志
-            log.info(ResultCode.FAILED_CREATE.toString());
+            log.warn(ResultCode.FAILED_CREATE.toString());
             //抛异常
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_CREATE));
+            throw new BusinessException(ResultCode.FAILED_CREATE);
         }
         //打印日志
-        log.info("新增用户成功,username:" + user.getUserName());
-        return Result.sucess();
+        log.info("新增用户成功,username:{}",user.getUserName());
+        return Result.success();
     }
 
     @Override
@@ -188,11 +182,11 @@ public class UserServiceImpl implements IUserService {
                 .eq(User::getDeleteState,0));
         //用户不存在
         if(user == null){
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
+            throw new BusinessException(ResultCode.FAILED_USER_NOT_EXISTS);
         }
         //用户密码错误
         if(!SecurityUtil.checkPassword(loginRequest.getPassword(), user.getPassword())){
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_LOGIN));
+            throw new BusinessException(ResultCode.FAILED_LOGIN);
         }
         //密码正确
         UserLoginResponse loginResponse = new UserLoginResponse();
@@ -244,7 +238,7 @@ public class UserServiceImpl implements IUserService {
                 .eq(User::getId, id).eq(User::getDeleteState,0));
         //不存在
         if (user == null) {
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
+            throw new BusinessException(ResultCode.FAILED_USER_NOT_EXISTS);
         }
         log.info("查询用户成功,用户id:{}",id);
         return user;
@@ -257,7 +251,7 @@ public class UserServiceImpl implements IUserService {
     @Override
     public void updateOneArticleCountById(Long id,int increment) {
         if(id == null || id <= 0 ) {
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
         }
         // 直接更新，利用数据库原子操作避免并发问题
         int rows = userMapper.update( new LambdaUpdateWrapper<User>()
@@ -267,9 +261,9 @@ public class UserServiceImpl implements IUserService {
                 .eq(User::getDeleteState, 0)
         );
         if (rows != 1) {
-            // 可能原因：用户不存在、已删除或计数未变化
+            // 计数未变化,是否被禁言或者被删除在controller层已经初步校验过了
             log.warn("更新用户发帖数量失败, userId: {}", id);
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
+            throw new SystemException(ResultCode.FAILED_USER_NOT_EXISTS);
         }
         log.info("用户：文章数量更新");
     }
@@ -290,12 +284,12 @@ public class UserServiceImpl implements IUserService {
     public boolean modifyUserInfoById(User user) {
         if(user == null || user.getEmail() == null){
             log.warn(ResultCode.FAILED_USER_NOT_EXISTS.toString());
-
-            return false;
+            throw new BusinessException(ResultCode.FAILED_USER_NOT_EXISTS);
         }
         if(userMapper.selectCount(new LambdaQueryWrapper<User>()
                 .eq(User::getId,user.getId())) == null){
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
+            log.warn(ResultCode.FAILED_USER_NOT_EXISTS.toString());
+            throw new BusinessException(ResultCode.FAILED_USER_NOT_EXISTS);
         }
         //。。。补充完整校验
         //改进，判断有变化再改，如果都没变化就可以不用改
@@ -307,8 +301,8 @@ public class UserServiceImpl implements IUserService {
                 .set(User::getRemark,user.getRemark())
                 .eq(User::getId, user.getId()));
         if(row != 1) {
-            log.error("{}: id = {}",user.getId(),ResultCode.FAILED_MODIFY_USER.getMessage());
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_MODIFY_USER));
+            log.error("用户 {} 信息更新失败",user.getId());
+            throw new SystemException(ResultCode.FAILED_MODIFY_USER);
         }
         return true;
     }
@@ -318,7 +312,8 @@ public class UserServiceImpl implements IUserService {
     public void modifyUserInfoPasswordById(String password,Long id) {
         //判断
         if(id == null || id <= 0){
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+            log.warn(ResultCode.FAILED_USER_NOT_EXISTS.toString());
+            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
         }
         //密码需要加密
         password = SecurityUtil.encrypt(password);
@@ -326,33 +321,30 @@ public class UserServiceImpl implements IUserService {
                 .set(User::getPassword,password)
                 .eq(User::getId,id)
                 .eq(User::getDeleteState,0)) != 1) {
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_MODIFY_USER));
+            log.error("用户 {} 更新密码失败",id);
+            throw new SystemException(ResultCode.FAILED_MODIFY_USER);
         }
 
     }
     @Transactional
     @Override
-    public Result<?> modifyUserInfoEmailById(String email, Long id) {
+    public Result<?> modifyUserInfoEmailById(String email, Long id,String code) {
         //判断
         if(id == null || id <= 0){
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
         }
-        //验证邮箱状态
-        // 检查邮箱验证状态
-        EmailVerification verification = verificationMapper.selectOne(new LambdaQueryWrapper<EmailVerification>()
-                .eq(EmailVerification::getEmail, email));
+        //验证邮箱
+        emailServiceImpl.verifyEmail(email,code);
 
-        if (verification == null || !verification.getVerified()) {
-            return Result.failed(ResultCode.ERROR_EMAIL_NOT_VERIFIED);
-        }
         //todo需要检查邮箱是否被占用
         if(userMapper.update(new LambdaUpdateWrapper<User>()
                 .set(User::getEmail,email)
                 .eq(User::getId,id)
                 .eq(User::getDeleteState,0)) != 1) {
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_MODIFY_USER));
+            log.error("用户 {} 更新邮箱失败",id);
+            throw new SystemException(ResultCode.FAILED_MODIFY_USER);
         }
-        return Result.sucess();
+        return Result.success();
     }
 
 }

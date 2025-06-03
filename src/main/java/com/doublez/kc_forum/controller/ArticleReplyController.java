@@ -3,6 +3,7 @@ package com.doublez.kc_forum.controller;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.exception.BusinessException;
 import com.doublez.kc_forum.common.pojo.request.ArticleReplyAddRequest;
 import com.doublez.kc_forum.common.pojo.response.ViewArticleReplyResponse;
 import com.doublez.kc_forum.common.utiles.AuthUtils;
@@ -50,7 +51,7 @@ public class ArticleReplyController {
 
         articleReplyServiceImpl.createArticleReply(articleReplyAddRequest);
 
-        return Result.sucess();
+        return Result.success();
     }
     @GetMapping("/getArticleReplies")
     @Operation(summary = "获取回复帖子",
@@ -60,8 +61,8 @@ public class ArticleReplyController {
         if(articleId != null && articleId > 0) {
             return articleReplyServiceImpl.getArticleReply(articleId);
         }
-        log.error("传入参数有错，articleId:{}", articleId);
-        throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+        log.warn("传入参数有错，articleId:{}", articleId);
+        throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
     }
 
     @PostMapping("/deleteArticleReply")
@@ -72,8 +73,9 @@ public class ArticleReplyController {
         if(articleReplyId > 0) {
             Long userId = JwtUtil.getUserId(request);
             if(articleReplyServiceImpl.deleteArticleReply(userId,articleReplyId,articleId) != 1){
-                throw new ApplicationException(Result.failed(ResultCode.FAILED_REPLY_DELETE));
+                log.error("帖子删除异常：{}", articleReplyId);
+                throw new BusinessException(ResultCode.FAILED_REPLY_DELETE);
             }
-        }else throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+        }else throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
     }
 }

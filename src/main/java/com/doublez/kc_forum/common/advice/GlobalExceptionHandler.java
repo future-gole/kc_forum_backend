@@ -3,6 +3,8 @@ package com.doublez.kc_forum.common.advice;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.exception.BusinessException;
+import com.doublez.kc_forum.common.exception.SystemException;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -29,15 +31,45 @@ import java.util.Map;
 @Slf4j
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<Result<?>> businessExceptionHandler(BusinessException e) {
+        // Directly use the ResultCode (and its HttpStatus) from the exception
+        ResultCode resultCode = e.getResultCode();
+        log.warn("BusinessException caught: code={}, httpStatus={}, message='{}'",
+                resultCode.getCode(), resultCode.getHttpStatus(), e.getMessage());
+
+        // The errResult in the exception should already be correctly formatted
+        return new ResponseEntity<>(e.getErrResult(), resultCode.getHttpStatus());
+    }
+
+    @ExceptionHandler(SystemException.class)
+    public ResponseEntity<Result<?>> systemExceptionHandler(SystemException e) {
+        ResultCode resultCode = e.getResultCode();
+        log.error("SystemException caught: code={}, httpStatus={}, message='{}'",
+                resultCode.getCode(), resultCode.getHttpStatus(), e.getMessage(), e); // Log full stack for system errors
+
+        return new ResponseEntity<>(e.getErrResult(), resultCode.getHttpStatus());
+    }
+
+
+    // Handler for ApplicationException if it can be thrown directly
+    // or if other custom exceptions inherit from it but not Business/System
     @ExceptionHandler(ApplicationException.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public Result<?> applicationExceptionHandler(ApplicationException e) {
-        //打印堆栈信息日志
-        log.error(e.getMessage(),e);
-        if(e.getErrResult() != null){
-            return e.getErrResult();
+    public ResponseEntity<Result<?>> applicationExceptionHandler(ApplicationException e) {
+        ResultCode resultCode = e.getResultCode();
+        // This case might occur if ApplicationException is thrown directly
+        // without being a BusinessException or SystemException
+        if (resultCode == null) {
+            // This should ideally not happen if ApplicationException is always constructed with a ResultCode.
+            // But as a fallback:
+            log.error("ApplicationException caught without a specific ResultCode. Defaulting to ERROR_SERVICES. Message: {}", e.getMessage(), e);
+            resultCode = ResultCode.ERROR_SERVICES;
+            return new ResponseEntity<>(Result.failed(resultCode, e.getMessage()), resultCode.getHttpStatus());
         }
-        return Result.failed(ResultCode.ERROR_SERVICES);
+
+        log.error("Generic ApplicationException caught: code={}, httpStatus={}, message='{}'",
+                resultCode.getCode(), resultCode.getHttpStatus(), e.getMessage(), e);
+        return new ResponseEntity<>(e.getErrResult(), resultCode.getHttpStatus());
     }
 
     /**
@@ -45,12 +77,13 @@ public class GlobalExceptionHandler {
      * 如果你希望404也返回统一JSON格式
      */
     @ExceptionHandler(NoResourceFoundException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public Result<?> noResourceFoundExceptionHandler(NoResourceFoundException e) {
+    public ResponseEntity<Result<?>> noResourceFoundExceptionHandler(NoResourceFoundException e) {
         log.warn("NoResourceFoundException caught: Resource not found for request URL '{}'", e.getResourcePath());
-        return Result.failed(ResultCode.FAILED_NOT_EXISTS);
+        ResultCode resultCode = ResultCode.FAILED_NOT_EXISTS; // Specific ResultCode
+        Result<?> result = Result.failed(resultCode);
+        return new ResponseEntity<>(result, resultCode.getHttpStatus());
     }
-
+    //todo 统一风格
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public Result<?> globalExceptionHandler(Exception e) {
@@ -65,18 +98,19 @@ public class GlobalExceptionHandler {
      * 处理HTTP消息不可读异常 HttpMessageNotReadableException
      * 例如，请求体JSON格式错误
      */
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public Result<?> HttpMessageNotReadableExceptionHandler(HttpMessageNotReadableException e) {
-        log.warn("Http message not readable exception: {}",e.getMessage(),e);
-
-        return Result.failed(ResultCode.FAILED_PARAMS_VALIDATE);
+    public ResponseEntity<Result<?>> httpMessageNotReadableExceptionHandler(HttpMessageNotReadableException e) {
+        log.warn("HttpMessageNotReadableException: {}. Root cause: {}", e.getMessage(), e.getMostSpecificCause().getMessage());
+        ResultCode resultCode = ResultCode.FAILED_PARAMS_VALIDATE; // Specific ResultCode
+        Result<?> result = Result.failed(resultCode, "请求体格式错误或参数无法解析");
+        return new ResponseEntity<>(result, resultCode.getHttpStatus());
     }
 
     /**
      * 处理参数校验异常 MethodArgumentNotValidException
      * 通常由 @Valid 注解触发
      */
+    //todo 统一风格
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {

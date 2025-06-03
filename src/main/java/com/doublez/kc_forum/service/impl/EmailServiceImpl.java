@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.exception.BusinessException;
+import com.doublez.kc_forum.common.exception.SystemException;
 import com.doublez.kc_forum.mapper.EmailVerificationMapper;
 import com.doublez.kc_forum.mapper.UserMapper;
 import com.doublez.kc_forum.model.EmailVerification;
@@ -14,17 +16,16 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
@@ -41,6 +42,9 @@ public class EmailServiceImpl implements IemailService {
     @Resource
     private JavaMailSender mailSender;
 
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
     @Value("${spring.mail.username}")
     private String fromEmail;
 
@@ -50,8 +54,9 @@ public class EmailServiceImpl implements IemailService {
     @Autowired
     private EmailVerificationMapper verificationMapper;
 
+    private final String keyPrefix = "code:register:";
     //发送邮箱私有类，添加code
-    private Result sendVerificationEmail(String toEmail, String verificationCode) {
+    private Result<?> sendVerificationEmail(String toEmail, String verificationCode) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
@@ -63,25 +68,25 @@ public class EmailServiceImpl implements IemailService {
             log.info("验证邮件已发送至: {}", toEmail);
         } catch (Exception e) {
             log.error("发送邮件失败: {}", e.getMessage());
-            throw new ApplicationException(Result.failed(ResultCode.ERROR_SEND_EMAIL));
+            throw new SystemException(ResultCode.ERROR_SEND_EMAIL);
         }
-        return Result.sucess();
+        return Result.success();
     }
 
-    @Scheduled(cron = "0 0 * * * ?")
-    @Override
-    public void clearExpiredVerificationCodes() {
-        log.info("开始清理过期的验证码...");
-        //获取当前时间
-        LocalDateTime now = LocalDateTime.now();
-        verificationMapper.delete(new LambdaQueryWrapper<EmailVerification>()
-                .le(EmailVerification::getExpiryTime,now));
-        log.info("清理成功");
-    }
+//    @Scheduled(cron = "0 0 * * * ?")
+//    @Override
+//    public void clearExpiredVerificationCodes() {
+//        log.info("开始清理过期的验证码...");
+//        //获取当前时间
+//        LocalDateTime now = LocalDateTime.now();
+//        verificationMapper.delete(new LambdaQueryWrapper<EmailVerification>()
+//                .le(EmailVerification::getExpiryTime,now));
+//        log.info("清理成功");
+//    }
 
     // 如果需要发送HTML格式邮件，可以使用这个方法
     //发送邮箱私有类，添加code
-    private Result sendHtmlVerificationEmail(String toEmail, String verificationCode) {
+    private Result<?> sendHtmlVerificationEmail(String toEmail, String verificationCode) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true);
@@ -141,72 +146,47 @@ public class EmailServiceImpl implements IemailService {
             log.info("HTML验证邮件已发送至: {}", toEmail);
         } catch (Exception e) {
             log.error("发送HTML邮件失败: {}", e.getMessage());
-            throw new ApplicationException(Result.failed(ResultCode.ERROR_SEND_EMAIL));
+            throw new SystemException(ResultCode.ERROR_SEND_EMAIL);
         }
-        return Result.sucess();
+        return Result.success();
     }
 
-    @Transactional
+
     @Override
-    public Result sendVerificationCode(String email) {
-//        //检查邮箱是否被注册
-//        if(!existEmail(email)){
-//            return Result.failed(ResultCode.ERROR_EMAIL_ALREADY_REGISTERED);
-//        }
+    public Result<?> sendVerificationCode(String email) {
+        //检查邮箱是否被注册
+        if(existEmail(email)){
+            return Result.failed(ResultCode.ERROR_EMAIL_ALREADY_REGISTERED);
+        }
+        log.info("邮箱: {}没有被注册，开始生成验证码", email);
         //生成6位随机验证码
-        String verificationCode = String.format("%06d", new Random().nextInt(999999));
+        String verificationCode = String.format("%06d", new Random().nextInt(1000000));
 
-        // 查找是否已有验证记录
-        LambdaQueryWrapper<EmailVerification> verificationQuery = new LambdaQueryWrapper<>();
-        verificationQuery.eq(EmailVerification::getEmail, email);
-        EmailVerification verification = verificationMapper.selectOne(verificationQuery);
-
-        if (verification == null) {
-            verification = new EmailVerification();
-            verification.setEmail(email);
-        }
-
-        // 更新验证码信息
-        verification.setVerificationCode(verificationCode);
-        verification.setExpiryTime(LocalDateTime.now().plusMinutes(10));
-        verification.setVerified(false);
-
-        // 保存或更新验证码
-        if (verification.getId() == null) {
-            verificationMapper.insert(verification);
-        } else {
-            verificationMapper.updateById(verification);
-        }
+        String key = keyPrefix  + email;
+        //存入redis中,不存在创建，存在就覆盖
+        redisTemplate.opsForValue().set(key,verificationCode,10, TimeUnit.MINUTES);
 
         // 发送验证邮件
         return sendHtmlVerificationEmail(email, verificationCode);
     }
 
     @Override
-    public Result verifyEmail(String email, String code) {
+    public boolean verifyEmail(String email, String code) {
         // 查找验证记录
-        EmailVerification verification = verificationMapper.selectOne(new LambdaQueryWrapper<EmailVerification>()
-                .eq(EmailVerification::getEmail, email));
-
-        if (verification == null) {
-            return Result.failed(ResultCode.ERROR_EMAIL_NOT_FOUND);
+        String key = keyPrefix + email;
+        String trueCode = redisTemplate.opsForValue().get(key);
+        //检查是否有记录
+        if(trueCode == null){
+            throw new BusinessException(ResultCode.ERROR_EMAIL_NOT_VERIFIED);
         }
-
-        // 检查验证码是否正确
-        if (!verification.getVerificationCode().equals(code)) {
-            return Result.failed(ResultCode.ERROR_VERIFICATION_CODE_INCORRECT);
+        //检查验证码是否正确
+        if(!trueCode.equals(code)){
+            throw new BusinessException(ResultCode.ERROR_VERIFICATION_CODE_INCORRECT);
         }
+        //验证码正确，删除验证码
+        redisTemplate.delete(key);
 
-        // 检查验证码是否过期
-        if (verification.getExpiryTime().isBefore(LocalDateTime.now())) {
-            return Result.failed(ResultCode.ERROR_VERIFICATION_CODE_EXPIRED);
-        }
-
-        // 标记为已验证
-        verification.setVerified(true);
-        verificationMapper.updateById(verification);
-
-        return Result.sucess();
+        return true;
     }
 
     private boolean existEmail(String email) {

@@ -3,6 +3,8 @@ package com.doublez.kc_forum.common.utiles;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.exception.BusinessException;
+import com.doublez.kc_forum.common.exception.SystemException;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -119,12 +121,12 @@ public class JwtUtil {
                 userId = Long.valueOf(claims.get(USER_ID).toString());
             } catch (NumberFormatException e) {
                 // 处理 "id" 不是 Integer 类型的情况
-                throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+                throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE,"用户id不为long类型");
             }
         }
         if (userId == null) {
             // 处理用户 ID 为空的情况
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_CHECK_USERID));
+            throw new BusinessException(ResultCode.FAILED_CHECK_USERID);
         }
         return userId;
     }
@@ -145,7 +147,7 @@ public class JwtUtil {
         Object emailObject = claims.get(EMAIL);
         if (emailObject == null) {
             log.error("Token Claims 中缺少 'email' 字段. Claims: {}", claims);
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_CHECK_USERID)); // 使用你定义的枚举
+            throw new BusinessException(ResultCode.FAILED_CHECK_USERID,"没有获取到用户邮箱");
         }
 
         try {
@@ -153,7 +155,7 @@ public class JwtUtil {
             return String.valueOf(emailObject.toString());
         } catch (NumberFormatException e) {
             log.error("Token Claims 中的 'email' 字段格式非 Long: {}. Claims: {}", emailObject, claims);
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
         }
     }
 
@@ -164,7 +166,7 @@ public class JwtUtil {
         if (authorizationHeader == null || !authorizationHeader.startsWith(bearerPrefix)) {
             log.warn("请求头 Authorization 缺失或格式错误");
             // 返回更具体的错误码和消息
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_UNAUTHORIZED));
+            throw new BusinessException(ResultCode.FAILED_UNAUTHORIZED);
         }
 
         final String token = authorizationHeader.substring(bearerPrefix.length());
@@ -175,7 +177,7 @@ public class JwtUtil {
             if (claims == null) {
                 // parseToken 返回 null 表示非过期的其他解析错误
                 log.warn("Token 无效 (非过期错误)");
-                throw new ApplicationException(Result.failed(ResultCode.FAILED_UNAUTHORIZED));
+                throw new BusinessException(ResultCode.FAILED_UNAUTHORIZED);
             }
         } catch (ExpiredJwtException e) {
             log.warn("尝试从请求获取用户ID时 Token 已过期");

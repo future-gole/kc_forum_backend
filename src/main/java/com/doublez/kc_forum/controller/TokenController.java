@@ -3,6 +3,7 @@ package com.doublez.kc_forum.controller;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.exception.BusinessException;
 import com.doublez.kc_forum.common.utiles.JwtUtil;
 import com.doublez.kc_forum.service.impl.RefreshTokenService;
 import jakarta.servlet.http.Cookie;
@@ -42,7 +43,7 @@ public class TokenController {
 
         if (refreshTokenFromCookie == null || refreshTokenFromCookie.isEmpty()) {
             log.warn("刷新请求中缺少 'refreshToken' Cookie");
-            throw new ApplicationException(Result.failed(ResultCode.FAIL_REFRESH_TOKEN));
+            throw new BusinessException(ResultCode.FAIL_REFRESH_TOKEN);
         }
 
         // 1. 验证从 Cookie 获取的 Refresh Token 是否在 Redis 中有效
@@ -93,7 +94,7 @@ public class TokenController {
                     expiredCookie.setPath("/api/token");
                     expiredCookie.setMaxAge(0); // 设置 MaxAge=0 使 Cookie 立即过期
                     response.addCookie(expiredCookie);
-                    throw new ApplicationException(Result.failed(ResultCode.FAILED_UNAUTHORIZED));
+                    throw new BusinessException(ResultCode.FAILED_UNAUTHORIZED);
                 });
     }
 }

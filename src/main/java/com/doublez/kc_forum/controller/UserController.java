@@ -2,17 +2,15 @@ package com.doublez.kc_forum.controller;
 
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
-import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.exception.BusinessException;
+import com.doublez.kc_forum.common.exception.SystemException;
 import com.doublez.kc_forum.common.pojo.request.ModifyUerRequest;
 import com.doublez.kc_forum.common.pojo.request.RegisterRequest;
 import com.doublez.kc_forum.common.pojo.request.UserLoginRequest;
 import com.doublez.kc_forum.common.pojo.response.UserLoginResponse;
 import com.doublez.kc_forum.common.utiles.JwtUtil;
-import com.doublez.kc_forum.common.utiles.SecurityUtil;
 import com.doublez.kc_forum.model.User;
-import com.doublez.kc_forum.service.impl.RefreshTokenService;
 import com.doublez.kc_forum.service.impl.UserServiceImpl;
-import io.jsonwebtoken.Claims;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,16 +22,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.util.HashMap;
-import java.util.Map;
 
 
 @RestController
@@ -55,10 +46,10 @@ public class UserController {
         try {
             // 调用服务上传头像
             String avatarUrl = userService.uploadAvatar(userId, file);
-            return Result.sucess(avatarUrl); // 返回头像URL
+            return Result.success(avatarUrl); // 返回头像URL
         } catch (Exception e) {
             log.error("用户 {} 上传头像失败", userId, e);
-            return Result.failed(ResultCode.UPLOAD_FAILED); // 返回上传失败
+            throw new BusinessException(ResultCode.UPLOAD_AVATAR_FAILED); // 返回上传失败
         }
     }
 
@@ -70,7 +61,7 @@ public class UserController {
         //确认两次密码是否相等
         if(!registerRequest.getPassword().equals(registerRequest.getRepeatPassword())) {
             log.warn(ResultCode.FAILED_TWO_PWD_NOT_SAME.toString());
-            return Result.failed(ResultCode.FAILED_TWO_PWD_NOT_SAME);
+            throw new BusinessException(ResultCode.FAILED_TWO_PWD_NOT_SAME);
         }
         //返回成功
         return userService.createNormalUser(registerRequest);
@@ -151,6 +142,9 @@ public class UserController {
             return userService.selectUserInfoById(userId);
         } else {
             //查询对应用户id
+            if(id < 0){
+                throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE,"用户id小于0");
+            }
             return userService.selectUserInfoById(id);
         }
     }
@@ -166,7 +160,7 @@ public class UserController {
             user.setId(userId);
         } catch (BeansException e) {
             log.error(ResultCode.ERROR_TYPE_CHANGE.toString());
-            throw new ApplicationException(Result.failed(ResultCode.ERROR_TYPE_CHANGE));
+            throw new SystemException(ResultCode.ERROR_TYPE_CHANGE);
         }
         return userService.modifyUserInfoById(user);
     }
@@ -178,23 +172,23 @@ public class UserController {
         //确认两次密码是否相等
         if(!password.equals(repeatPassword)) {
             log.warn(ResultCode.FAILED_TWO_PWD_NOT_SAME.toString());
-            return Result.failed(ResultCode.FAILED_TWO_PWD_NOT_SAME);
+            throw new BusinessException(ResultCode.FAILED_TWO_PWD_NOT_SAME);
         }
         //获取当前用户id
         Long userId = JwtUtil.getUserId(request);
 
         userService.modifyUserInfoPasswordById(password,userId);
-        return Result.sucess();
+        return Result.success();
     }
 
     @PostMapping("/modifyEmail")
     @Operation(summary = "修改用户邮箱")
-    public Result<?> modifyInfoPassword(HttpServletRequest request,@NotBlank @Email String email) {
+    public Result<?> modifyInfoEmail(HttpServletRequest request,@NotBlank @Email String email,@NotBlank String code) {
 
         //获取当前用户id
         Long userId = JwtUtil.getUserId(request);
 
-        userService.modifyUserInfoEmailById(email,userId);
-        return Result.sucess();
+        userService.modifyUserInfoEmailById(email,userId,code);
+        return Result.success();
     }
 }

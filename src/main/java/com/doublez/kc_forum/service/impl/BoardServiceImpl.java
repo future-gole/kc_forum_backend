@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.exception.BusinessException;
 import com.doublez.kc_forum.mapper.BoardMapper;
 import com.doublez.kc_forum.model.Board;
 import com.doublez.kc_forum.service.IBoardService;
@@ -57,7 +58,7 @@ public class BoardServiceImpl implements IBoardService {
     @Override
     public void updateOneArticleCountById(Long id,int increment) {
         if(id == null || id <= 0 ) {
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
         }
         // 直接更新，利用数据库原子操作避免并发问题
         int rows = boardMapper.update( new LambdaUpdateWrapper<Board>()
@@ -68,7 +69,7 @@ public class BoardServiceImpl implements IBoardService {
         );
         if (rows == 0) {
             log.warn("更新用户发帖数量失败, userId: {}", id);
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
+            throw new BusinessException(ResultCode.FAILED_UPDATE_ARTICLE);
         }
         log.info("板块：文章数量更新");
     }

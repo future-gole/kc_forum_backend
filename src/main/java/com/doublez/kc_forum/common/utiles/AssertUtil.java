@@ -18,7 +18,7 @@ public class AssertUtil {
     public static<T> void checkClassNotNull(T source, ResultCode resultCode, Long id)  {
         if(source == null){
             log.error("{} 资源id:{}", resultCode.getMessage(), id);
-            throw new ApplicationException(Result.failed(resultCode));
+            throw new ApplicationException(resultCode);
         }
     }
 }

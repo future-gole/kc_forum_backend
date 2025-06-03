@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.exception.BusinessException;
+import com.doublez.kc_forum.common.exception.SystemException;
 import com.doublez.kc_forum.common.pojo.request.UpdateArticleRequest;
 import com.doublez.kc_forum.common.pojo.response.ArticleDetailResponse;
 import com.doublez.kc_forum.common.pojo.response.UserArticleResponse;
@@ -46,8 +48,8 @@ public class ArticleServiceImpl implements IArticleService {
         Article article = articleMapper.selectOne(new LambdaQueryWrapper<Article>().select(Article::getUserId)
                 .eq(Article::getId, articleId));
         if (article == null) {
-            log.error("文章不存在，无法查询对应用户id");
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_NOT_EXISTS));
+            log.warn("文章不存在，无法查询对应用户id");
+            throw new BusinessException(ResultCode.FAILED_ARTICLE_NOT_EXISTS);
         }
         return article.getUserId();
     }
@@ -60,7 +62,8 @@ public class ArticleServiceImpl implements IArticleService {
                 || article.getBoardId() == null
                 || !StringUtils.hasText(article.getTitle())
                 || !StringUtils.hasText(article.getContent())){
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+            log.error("转化后的文章缺少字段");
+            throw new SystemException(ResultCode.FAILED_PARAMS_VALIDATE);
         }
         //赋予默认值,好像不需要这样，数据库的性能更快
 //        article.setLikeCount(0);
@@ -74,7 +77,7 @@ public class ArticleServiceImpl implements IArticleService {
         int articleRow  = articleMapper.insert(article);
         if (articleRow != 1){
             log.warn(ResultCode.FAILED_CREATE.toString());
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_CREATE));
+            throw new SystemException(ResultCode.FAILED_CREATE);
         }
 
         //更新用户发帖数量
@@ -84,7 +87,7 @@ public class ArticleServiceImpl implements IArticleService {
         boardServiceImpl.updateOneArticleCountById(article.getBoardId(),1);
 
         //打印日志
-        log.info("发帖成功, 帖子id: "+article.getId() +"用户id："+ article.getUserId() + "板块id: " + article.getBoardId());
+        log.info("发帖成功, 帖子id: {}, 用户id：{} ,板块id:{} " ,article.getId() ,article.getUserId(),article.getBoardId());
 
     }
 
@@ -105,8 +108,8 @@ public class ArticleServiceImpl implements IArticleService {
             // 先判断板块是否存在
             Board board = boardServiceImpl.selectOneBoardById(id);
             if (board == null) {
-                log.error(ResultCode.FAILED_BOARD_NOT_EXISTS.toString()+"boardId: ",id);
-                throw new ApplicationException(Result.failed(ResultCode.FAILED_BOARD_NOT_EXISTS));
+                log.warn("板块不存在 boardId: {}",id);
+                throw new SystemException(ResultCode.FAILED_BOARD_NOT_EXISTS);
             }
             // 根据 boardId 查询文章
             articles = articleMapper.selectList(new LambdaQueryWrapper<Article>()
@@ -177,7 +180,7 @@ public class ArticleServiceImpl implements IArticleService {
         if(articleMapper.update(new LambdaUpdateWrapper<Article>().set(Article::getVisitCount,article.getVisitCount()+1)
                 .eq(Article::getId,id).eq(Article::getDeleteState, 0).eq(Article::getState, 0)) != 1){
             log.error(ResultCode.ERROR_SERVICES+": 访问量新增异常");
-            throw new ApplicationException(Result.failed(ResultCode.ERROR_SERVICES));
+            throw new SystemException(ResultCode.ERROR_SERVICES);
         }
         //更新返回给前端的帖子访问次数
         articleDetailResponse.setVisitCount(articleDetailResponse.getVisitCount()+1);
@@ -200,8 +203,8 @@ public class ArticleServiceImpl implements IArticleService {
         User user = userServiceImpl.selectUserInfoById(userId);
         //判断为空
         if(user == null){
-            log.error(ResultCode.FAILED_USER_NOT_EXISTS.toString()+"userId: ",userId);
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_NOT_EXISTS));
+            log.warn("用户不存在, userId:{} ",userId);
+            throw new BusinessException(ResultCode.FAILED_USER_NOT_EXISTS);
         }
         UserArticleResponse userArticleResponse =copyProperties(user, UserArticleResponse.class);
         List<ViewArticlesResponse> viewArticlesResponses = articles.stream().map(article -> {
@@ -221,15 +224,17 @@ public class ArticleServiceImpl implements IArticleService {
                 .select(Article::getDeleteState, Article::getState)
                 .eq(Article::getId,updateArticleRequest.getId()));
         if( article.getState() == 1  ){
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_BANNED));
+            log.warn("帖子被禁言, id:{}",updateArticleRequest.getId());
+            throw new BusinessException(ResultCode.FAILED_ARTICLE_BANNED);
         }else if(  article.getDeleteState() == 1 ){
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_NOT_EXISTS));
+            log.warn("帖子被删除, id:{}",updateArticleRequest.getId());
+            throw new BusinessException(ResultCode.FAILED_ARTICLE_NOT_EXISTS);
         }
         if(articleMapper.updateById(copyProperties(updateArticleRequest, Article.class)) == 1){
             log.info("帖子更新成功：{}",updateArticleRequest.getId());
             return true;
         }
-        throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_NOT_EXISTS));
+        throw new SystemException(ResultCode.FAILED_UPDATE_ARTICLE);
     }
 
     @Transactional
@@ -240,19 +245,19 @@ public class ArticleServiceImpl implements IArticleService {
         // 先检查记录是否存在
         Article article = articleMapper.selectById(id);
         if (article == null) {
-            log.error("删除帖子失败, 帖子不存在, id: {}", id);
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_NOT_EXISTS));
+            log.warn("删除帖子失败, 帖子不存在, id: {}", id);
+            throw new BusinessException(ResultCode.FAILED_ARTICLE_NOT_EXISTS);
         }
         if(article.getDeleteState() == 1){
             log.error("帖子已经被删除，id：{}",id);
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_NOT_EXISTS));
+            throw new BusinessException(ResultCode.FAILED_ARTICLE_NOT_EXISTS);
         }
-        // 执行更新操作
+        // 执行删除操作
         if( articleMapper.update(new LambdaUpdateWrapper<Article>()
                 .set(Article::getDeleteState, 1)
                 .eq(Article::getId, id)) != 1){
             log.warn("删除文章失败, id: {}", id);
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_ARTICLE_DELETE));
+            throw new SystemException(ResultCode.FAILED_ARTICLE_DELETE);
         }
 
         //更新用户发帖数量
@@ -262,8 +267,7 @@ public class ArticleServiceImpl implements IArticleService {
         boardServiceImpl.updateOneArticleCountById(article.getBoardId(),-1);
 
         //打印日志
-        log.info(ResultCode.SUCCESS.toString()+article.getId()+"删帖成功"
-                +"用户id："+ article.getUserId() + "板块id: " + article.getBoardId());
+        log.info("删帖成功,帖子id: {} ,用户id：{}, 板块id:{}",article.getId(), article.getUserId() ,article.getBoardId());
         return true;
     }
 
@@ -282,7 +286,7 @@ public class ArticleServiceImpl implements IArticleService {
             return target;
         } catch (Exception e) {
             log.error("类型转换失败: {} -> {}", source.getClass().getName(), targetClass.getName(), e);
-            throw new ApplicationException(Result.failed(ResultCode.ERROR_TYPE_CHANGE));
+            throw new SystemException(ResultCode.ERROR_TYPE_CHANGE);
         }
     }
 }

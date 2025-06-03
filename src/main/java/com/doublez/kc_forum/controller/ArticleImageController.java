@@ -63,7 +63,7 @@ public class ArticleImageController {
 
         boolean success = articleImageService.deleteImage(imageId);
         if (success) {
-            return Result.sucess();
+            return Result.success();
         } else {
             return Result.failed(ResultCode.FAILED_DELETE_IMAGE);
         }

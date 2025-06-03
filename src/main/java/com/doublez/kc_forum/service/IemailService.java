@@ -14,7 +14,7 @@ public interface IemailService {
     /**
      * 验证邮箱
      */
-    Result verifyEmail(String email, String code);
+    boolean verifyEmail(String email, String code);
 //    /**
 //     * 发送html邮件
 //     * @param toEmail
@@ -29,5 +29,5 @@ public interface IemailService {
 //     */
 //    Result sendVerificationEmail(String toEmail, String verificationCode);
 
-    void clearExpiredVerificationCodes();
+//    void clearExpiredVerificationCodes();
 }

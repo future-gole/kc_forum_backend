@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.http.HttpStatus;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -15,7 +16,6 @@ public class Result<T> {
     private String message;
     @JsonInclude(JsonInclude.Include.ALWAYS)//总是参与序列化
     private T data;
-
     // 新增字段：用于存放刷新的 Access Token
     @JsonInclude(JsonInclude.Include.NON_NULL) // 仅在不为 null 时参与序列化
     private String newAccessToken;
@@ -34,22 +34,23 @@ public class Result<T> {
         this.message = message;
         this.data = data;
     }
+
     /**
      * 成功的返回
      */
-    public static <T> Result<T> sucess(T data) {
+    public static <T> Result<T> success(T data) {
         return new Result<>(ResultCode.SUCCESS.getCode(), ResultCode.SUCCESS.getMessage(), data);
     }
 
-    public static <T> Result<T> sucess(String message, T data) {
+    public static <T> Result<T> success(String message, T data) {
         return new Result<>(ResultCode.SUCCESS.getCode(), message, data);
     }
 
-    public static <T> Result<T> sucess(String message) {
+    public static <T> Result<T> success(String message) {
         return new Result<>(ResultCode.SUCCESS.getCode(), message);
     }
 
-    public static <T> Result<T> sucess() {
+    public static <T> Result<T> success() {
         return new Result<>(ResultCode.SUCCESS.getCode(), ResultCode.SUCCESS.getMessage());
     }
 
@@ -70,6 +71,9 @@ public class Result<T> {
 
     public static <T> Result<T> failed(ResultCode resultCode) {
         return new Result<>(resultCode.getCode(), resultCode.getMessage());
+    }
+    public static <T> Result<T> failed(ResultCode resultCode,String customMessage) {
+        return new Result<>(resultCode.getCode(), customMessage);
     }
 
 }

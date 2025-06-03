@@ -5,6 +5,7 @@ package com.doublez.kc_forum.common.utiles;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.exception.BusinessException;
 import com.doublez.kc_forum.model.User;
 
 
@@ -27,7 +28,7 @@ public class AuthUtils {
         // 权限校验
         if (!userId.equals(ownerId)) {
             log.warn(ResultCode.FAILED_UNAUTHORIZED.toString() + "userId: {}  resourceId: {} Expected ownerId: {}", userId, resourceId, ownerId);
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_UNAUTHORIZED));
+            throw new BusinessException(ResultCode.FAILED_UNAUTHORIZED);
         }
         return true;
     }
@@ -35,7 +36,7 @@ public class AuthUtils {
     public static boolean userBannedChecker(@NotNull User user){
         if(user.getState() == 1 || user.getDeleteState() == 1){
             log.warn(ResultCode.FAILED_USER_BANNED.toString()+"id: {}",user.getId());
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_USER_BANNED));
+            throw new BusinessException(ResultCode.FAILED_USER_BANNED);
         }
         return true;
     }

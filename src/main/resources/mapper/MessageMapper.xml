@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.doublez.kc_forum.mapper.MessageMapper">
+
+    <!-- 定义ResultMap，将查询结果映射到RecentConversationsResponse DTO -->
+    <!-- type 属性指向您的 DTO 类的全限定名 -->
+    <resultMap id="recentConversationsResultMap" type="com.doublez.kc_forum.common.pojo.response.RecentConversationsResponse">
+        <!-- id 标签用于映射主键字段 -->
+        <id column="id" property="id"/>
+        <!-- result 标签用于映射其他字段 -->
+        <!-- column: SQL 查询结果中的列名 (通常是 AS 后的别名) -->
+        <!-- property: DTO 类中的字段名 -->
+        <result column="contactId" property="contactId"/>
+        <result column="contactNickname" property="contactNickname"/>
+        <result column="contactAvatar" property="contactAvatar"/>
+        <result column="lastMessageContent" property="lastMessageContent"/>
+        <result column="lastMessageTimestamp" property="lastMessageTimestamp"/>
+        <result column="unreadCount" property="unreadCount"/>
+    </resultMap>
+
+    <!-- SQL查询：获取指定用户的最近会话列表 -->
+    <!-- id 属性必须与 Mapper 接口中的方法名一致 -->
+    <!-- resultMap 属性指向上面定义的 resultMap 的 id -->
+    <!-- SQL查询：获取指定用户的最近会话列表 (兼容 MySQL 5.x) -->
+    <select id="getRecentConversations" resultMap="recentConversationsResultMap">
+        SELECT
+            m.id AS id,
+            -- 根据当前用户判断对方ID
+            (CASE WHEN m.post_user_id = #{currentUserId} THEN m.receive_user_id ELSE m.post_user_id END) AS contactId,
+            u.nick_name AS contactNickname,
+            u.avatar_url AS contactAvatar,
+            m.content AS lastMessageContent,
+            m.create_time AS lastMessageTimestamp,
+            -- 子查询计算未读消息数
+            (SELECT COUNT(m2.id)
+             FROM message m2
+             WHERE m2.receive_user_id = #{currentUserId}
+               AND m2.post_user_id = (CASE WHEN m.post_user_id = #{currentUserId} THEN m.receive_user_id ELSE m.post_user_id END)
+               AND m2.state = 0 -- 假设 0 表示未读
+               AND m2.delete_state = 0
+            ) AS unreadCount
+        FROM
+            message m
+                INNER JOIN (
+                -- 子查询：找到每个对话的最新消息的时间
+                SELECT
+                    LEAST(post_user_id, receive_user_id) AS user1,
+                    GREATEST(post_user_id, receive_user_id) AS user2,
+                    MAX(create_time) AS max_create_time
+                FROM
+                    message
+                WHERE
+                    (post_user_id = #{currentUserId} OR receive_user_id = #{currentUserId})
+                  AND delete_state = 0
+                GROUP BY
+                    user1, user2
+            ) AS latest_messages
+                           ON
+                               (
+                                   (m.post_user_id = latest_messages.user1 AND m.receive_user_id = latest_messages.user2) OR
+                                   (m.post_user_id = latest_messages.user2 AND m.receive_user_id = latest_messages.user1)
+                                   )
+                                   AND m.create_time = latest_messages.max_create_time
+                                   -- 确保我们只获取与当前用户相关的消息
+                                   AND (m.post_user_id = #{currentUserId} OR m.receive_user_id = #{currentUserId})
+                JOIN
+            user u ON (CASE WHEN m.post_user_id = #{currentUserId} THEN m.receive_user_id ELSE m.post_user_id END) = u.id
+        ORDER BY
+            m.create_time DESC;
+    </select>
+
+</mapper>

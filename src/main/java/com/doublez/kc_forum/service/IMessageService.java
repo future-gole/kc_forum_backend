@@ -1,7 +1,6 @@
 package com.doublez.kc_forum.service;
 
 import com.doublez.kc_forum.model.Message;
-import io.swagger.v3.oas.models.security.SecurityScheme;
 
 import java.util.List;
 
@@ -19,5 +18,5 @@ public interface IMessageService {
      */
     long selectUnreadCount(Long userId);
 
-    List<Message> selectUnreadByPostUserID(Long receiveUserId,Long postUserId);
+    List<Message> selectAllMessageByPostUserID(Long receiveUserId, Long postUserId);
 }

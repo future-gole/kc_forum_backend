@@ -2,6 +2,8 @@ package com.doublez.kc_forum.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.doublez.kc_forum.common.ResultCode;
+import com.doublez.kc_forum.common.exception.SystemException;
 import com.doublez.kc_forum.common.pojo.response.ImageUploadResponseDTO;
 import com.doublez.kc_forum.mapper.ArticleImageMapper;
 import com.doublez.kc_forum.model.ArticleImage;
@@ -92,8 +94,8 @@ public class ArticleImageServiceImpl extends ServiceImpl<ArticleImageMapper, Art
 
             return response;
         } catch (IOException e) {
-            log.error("Failed to upload image", e); // 打印异常信息
-            throw new RuntimeException("Failed to upload image", e);
+            log.error("上传图片失败:{}, articleId:{}, file:{}", e,articleId,file); // 打印异常信息
+            throw new SystemException(ResultCode.SUCCESS);
         }
     }
 

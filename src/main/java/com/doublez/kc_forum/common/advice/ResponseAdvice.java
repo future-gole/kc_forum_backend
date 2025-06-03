@@ -59,14 +59,14 @@ public class ResponseAdvice implements ResponseBodyAdvice<Object> {
         }
         // 2. 如果 body 是 null
         else if (body == null && !returnType.getParameterType().equals(void.class)) { // 避免包装 void 返回类型
-            finalResult = Result.sucess(); 
+            finalResult = Result.success();
         }
         // 3. 如果 body 是 String
         else if (body instanceof String) {
             // 特殊处理 String，需要序列化
             response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
             // 先包装，再设置 Token
-            Result<String> stringResult = Result.sucess((String) body);
+            Result<String> stringResult = Result.success((String) body);
             if (newAccessToken != null) {
                 stringResult.setNewAccessToken(newAccessToken);
             }
@@ -74,7 +74,7 @@ public class ResponseAdvice implements ResponseBodyAdvice<Object> {
         }
         // 4. 其他所有情况，都需要包装
         else {
-            finalResult = Result.sucess(body); // 假设默认包装为成功
+            finalResult = Result.success(body); // 假设默认包装为成功
         }
 
         //  将新 Token 设置到最终的 Result 对象中 (如果存在)

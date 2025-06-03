@@ -3,6 +3,7 @@ package com.doublez.kc_forum.controller;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.exception.BusinessException;
 import com.doublez.kc_forum.common.pojo.request.ArticleAddRequest;
 import com.doublez.kc_forum.common.pojo.request.UpdateArticleRequest;
 import com.doublez.kc_forum.common.pojo.response.ArticleDetailResponse;
@@ -57,9 +58,13 @@ public class ArticleController {
         //需要判断板块是否正常
         Board board = boardService.selectOneBoardById(articleAddRequest.getBoardId());
         //板块不存在或者板块被禁言
-        if(board == null || board.getState() == 1 ||board.getDeleteState() == 1){
-            log.warn("板块不存在或者已经被禁言");
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+        if(board == null) {
+            log.warn("板块不存在");
+            throw new BusinessException(ResultCode.FAILED_BOARD_NOT_EXISTS);
+        }
+        if(board.getState() == 1 ||board.getDeleteState() == 1){
+            log.warn("板块 {} 已经被禁言或者删除",board.getId());
+            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
         }
         //创建新的对象而不是注入！！！,要不然会导致插入一次之后id就不会变了
         Article article = new Article();
@@ -69,7 +74,7 @@ public class ArticleController {
         article.setUserId(userId);
         articleService.createArticle(article);
 
-        return Result.sucess();
+        return Result.success();
 
     }
 
@@ -84,7 +89,8 @@ public class ArticleController {
         if(boardId == null){
             return articleService.getAllArticlesByBoardId(null);
         }else if(boardId < 0){
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+            log.warn("板块 {} 不合法",boardId);
+            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
         }
 
         return articleService.getAllArticlesByBoardId(boardId);
@@ -102,16 +108,16 @@ public class ArticleController {
             Long userId = JwtUtil.getUserId(request);
             return articleService.getArticleDetailById(userId,articleId);
         }
-        log.error("传入参数有错，articleId:{}", articleId);
-        throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+        log.warn("传入参数有错，articleId:{}", articleId);
+        throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
     }
 
     @GetMapping("/getAllArticlesByUserId")
     @Operation(summary = "获取用户所属帖子", description = "根据用户 ID 获取其下所有帖子列表，由前端控制传入的是当前用户还是查询的目标用户")
     public List<ViewArticlesResponse> getAllArticlesByUserId(@Parameter(description = "用户ID")Long userId) {
         if(userId == null || userId < 0){
-            log.error("参数校验失败 userId:{}", userId);
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+            log.warn("参数校验失败 userId:{}", userId);
+            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
         }
         return articleService.getAllArticlesByUserId(userId);
     }
@@ -128,7 +134,7 @@ public class ArticleController {
     public boolean updateArticle(HttpServletRequest request, @RequestBody @Validated UpdateArticleRequest updateArticleRequest) {
         //简单判断
         if(updateArticleRequest.getId() < 1){
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+                throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
         }
         //鉴权
         Long userId = JwtUtil.getUserId(request);
@@ -145,7 +151,7 @@ public class ArticleController {
     @Operation(summary = "根据帖子id，删除对应帖子")
     public boolean deleteArticle(HttpServletRequest request, @Parameter(description = "帖子ID")@NotNull Long articleId) {
         if(articleId == null || articleId <= 0){
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_PARAMS_VALIDATE));
+            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
         }
         Long userId = JwtUtil.getUserId(request);
         //鉴权

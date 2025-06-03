@@ -1,20 +1,28 @@
 package com.doublez.kc_forum.common.exception;
 
 import com.doublez.kc_forum.common.Result;
+import com.doublez.kc_forum.common.ResultCode;
 import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 
-@NoArgsConstructor
-@Data
+
+@Getter
 public class ApplicationException extends RuntimeException{
     //异常中持有一个错误信息对象
-    @Getter
-    private Result errResult;
+    private final ResultCode resultCode;
+    private final Result<?> errResult;
 
-    public ApplicationException(Result errResult){
-        super(errResult.getMessage());
-        this.errResult = errResult;
+    public ApplicationException(ResultCode resultCode) {
+        super(resultCode.getMessage()); // Set message for RuntimeException
+        this.resultCode = resultCode;
+        this.errResult = Result.failed(resultCode); // Construct Result from ResultCode
+    }
+
+    public ApplicationException(ResultCode resultCode, String customMessage) {
+        super(customMessage);
+        this.resultCode = resultCode;
+        this.errResult = Result.failed(resultCode, customMessage);
     }
 }

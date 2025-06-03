@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.exception.BusinessException;
+import com.doublez.kc_forum.common.exception.SystemException;
 import com.doublez.kc_forum.mapper.LikesMapper;
 import com.doublez.kc_forum.model.Likes;
 import com.doublez.kc_forum.service.ILikesService;
@@ -41,7 +43,7 @@ public class LikesServiceImpl implements ILikesService {
         Likes existingLike = isLikes(userId, targetId, targetType);
         //判断
         if (existingLike != null) {
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_CHANGE_LIKE));
+            throw new BusinessException(ResultCode.FAILED_CHANGE_LIKE);
         }
         //todo检查文章和回复是否有效
         // 2. 插入点赞记录
@@ -54,7 +56,7 @@ public class LikesServiceImpl implements ILikesService {
 
         // 3. 更新 article 或 reply 的 like_count
         if(updateLikeCount(targetId, targetType, 1) != 1){
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_CHANGE_LIKE));
+            throw new SystemException(ResultCode.FAILED_CHANGE_LIKE);
         }
     }
 
@@ -65,7 +67,7 @@ public class LikesServiceImpl implements ILikesService {
         Likes existingLike = isLikes(userId, targetId, targetType);
 
         if (existingLike == null) {
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_CHANGE_LIKE));
+            throw new BusinessException(ResultCode.FAILED_CHANGE_LIKE);
         }
 
         // 2. 删除点赞记录
@@ -73,7 +75,7 @@ public class LikesServiceImpl implements ILikesService {
 
         // 3. 更新 article 或 reply 的 like_count
         if(updateLikeCount(targetId, targetType, -1) != 1){
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_CHANGE_LIKE));
+            throw new SystemException(ResultCode.FAILED_CHANGE_LIKE);
         }
     }
 
@@ -91,7 +93,7 @@ public class LikesServiceImpl implements ILikesService {
             return articleReplyService.updateLikeCount(targetId, increment);
         } else {
             log.error("取消/新增点赞失败，targetId: {}, targetType: {}",targetId, targetType);
-            throw new ApplicationException(Result.failed(ResultCode.FAILED_CHANGE_LIKE));
+            throw new SystemException(ResultCode.FAILED_CHANGE_LIKE);
         }
     }
 }

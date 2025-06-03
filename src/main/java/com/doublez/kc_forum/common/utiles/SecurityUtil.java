@@ -4,6 +4,7 @@ package com.doublez.kc_forum.common.utiles;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
+import com.doublez.kc_forum.common.exception.BusinessException;
 import com.doublez.kc_forum.model.User;
 import jakarta.validation.constraints.NotNull;
 import lombok.SneakyThrows;
@@ -19,7 +20,7 @@ public class SecurityUtil {
     public static String encrypt(String password){
         //判断是否为空
         if(!StringUtils.hasLength(password)){
-            throw new ApplicationException(Result.failed("密码为空"));
+            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE,"密码为空");
         }
         //生成盐值
         String salt = UUID.randomUUID().toString().replace("-", "");

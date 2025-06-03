@@ -31,6 +31,7 @@ mybatis-plus:
   configuration: # 配置打印 MyBatis⽇志
     map-underscore-to-camel-case: true #格式转化
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  mapper-locations: classpath*:/mapper/*.xml
 logging:
   pattern:
     dateformat: yyyy-MM-dd HH:mm:ss
