@@ -52,6 +52,6 @@ public class LikesController {
                              @RequestParam @NotNull Long targetId,
                              @RequestParam @NotNull String targetType){
         Long userId = JwtUtil.getUserId(request);
-        return likeService.checkLike(userId, targetId, targetType);
+        return likeService.checkLikeStatus(userId, targetId, targetType);
     }
 }

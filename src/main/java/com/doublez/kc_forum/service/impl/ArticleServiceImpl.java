@@ -270,7 +270,7 @@ public class ArticleServiceImpl implements IArticleService {
         log.info("删帖成功,帖子id: {} ,用户id：{}, 板块id:{}",article.getId(), article.getUserId() ,article.getBoardId());
         return true;
     }
-
+    @Override
     public int updateLikeCount(Long targetId, int increment){
         return articleMapper.update(new LambdaUpdateWrapper<Article>()
                 .eq(Article::getId,targetId)

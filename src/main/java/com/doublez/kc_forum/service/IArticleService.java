@@ -53,4 +53,6 @@ public interface IArticleService {
     boolean updateArticle(UpdateArticleRequest updateArticleRequest);
 
     boolean deleteArticle(Long id);
+
+    int updateLikeCount(Long targetId, int increment);
 }

@@ -7,6 +7,7 @@ import lombok.Data;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 //不需要加@Component，用到的时候需要创建一个新的对象而不是注入！！！
@@ -40,6 +41,6 @@ public class Board {
     private Byte state;
     private Byte deleteState;
     @JsonFormat(pattern = "yyyy-MM-dd")
-    private LocalDateTime createTime;
-    private LocalDateTime updateTime;
+    private LocalDate createTime;
+    private LocalDate updateTime;
 }

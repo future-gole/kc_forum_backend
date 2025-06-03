@@ -6,14 +6,21 @@ import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
 import com.doublez.kc_forum.common.exception.BusinessException;
+import com.doublez.kc_forum.common.exception.SystemException;
 import com.doublez.kc_forum.mapper.BoardMapper;
 import com.doublez.kc_forum.model.Board;
 import com.doublez.kc_forum.service.IBoardService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Slf4j
@@ -22,6 +29,12 @@ public class BoardServiceImpl implements IBoardService {
     @Autowired
     private BoardMapper boardMapper;
 
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+    private final String keyPrefix = "boards:list:";
     //TODO
     @Override
     public List<Board> selectBoardsByNum(int num) {
@@ -45,9 +58,33 @@ public class BoardServiceImpl implements IBoardService {
 
     @Override
     public List<Board> selectAllBoards() {
+        String key = keyPrefix + "all";
+        String cacheBoardJson = stringRedisTemplate.opsForValue().get(key);
+        //查询redis
+        if(StringUtils.hasText(cacheBoardJson)){
+            try {
+                log.info("命中 List<Board> 缓存，正在转化类型");
+                return objectMapper.readValue(cacheBoardJson, new TypeReference<List<Board>>() {});
+            } catch (JsonProcessingException e) {
+                log.error("json 转化 List<Board> 异常，e:{}",e.getMessage(),e);
+                throw new SystemException(ResultCode.ERROR_REDIS_CHANGE);
+            }
+        }
+        //查询数据库
         List<Board> boardList = boardMapper.selectList(new LambdaQueryWrapper<Board>().orderByAsc(Board::getSortPriority)
                 .eq(Board::getDeleteState,0).eq(Board::getState,0));
         log.info("boardList查询成功:{}", boardList);
+        //存入redis,空值也进行缓存，防止缓存穿透
+        if(boardList != null){
+            try {
+                cacheBoardJson = objectMapper.writeValueAsString(boardList);
+                stringRedisTemplate.opsForValue().set(key,cacheBoardJson);
+                log.info("List<Board> 已经存入redis中");
+            } catch (JsonProcessingException e) {
+                log.error("List<Board> 存入redis中异常，e:{}",e.getMessage(),e);
+                throw new SystemException(ResultCode.ERROR_REDIS_CHANGE);
+            }
+        }
         return boardList;
     }
 
