@@ -2,12 +2,12 @@ package com.doublez.kc_forum.controller;
 
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
-import com.doublez.kc_forum.common.exception.ApplicationException;
 import com.doublez.kc_forum.common.exception.BusinessException;
 import com.doublez.kc_forum.common.pojo.request.ArticleAddRequest;
 import com.doublez.kc_forum.common.pojo.request.UpdateArticleRequest;
 import com.doublez.kc_forum.common.pojo.response.ArticleDetailResponse;
-import com.doublez.kc_forum.common.pojo.response.ViewArticlesResponse;
+import com.doublez.kc_forum.common.pojo.response.ArticleMetaCacheDTO;
+import com.doublez.kc_forum.common.pojo.response.ViewArticleResponse;
 import com.doublez.kc_forum.common.utiles.AuthUtils;
 import com.doublez.kc_forum.common.utiles.JwtUtil;
 import com.doublez.kc_forum.model.Article;
@@ -85,7 +85,7 @@ public class ArticleController {
      */
     @Operation(summary = "获取板块下的所有帖子", description = "根据板块 ID 获取所有帖子")
     @GetMapping("/getAllArticlesByBoardId")
-    public List<ViewArticlesResponse> getAllArticlesByBoardId(@Parameter(description = "板块 ID") @RequestParam(required = false) Long boardId) {
+    public List<ArticleMetaCacheDTO> getAllArticlesByBoardId(@Parameter(description = "板块 ID") @RequestParam(required = false) Long boardId) {
         if(boardId == null){
             return articleService.getAllArticlesByBoardId(null);
         }else if(boardId < 0){
@@ -95,6 +95,24 @@ public class ArticleController {
 
         return articleService.getAllArticlesByBoardId(boardId);
     }
+
+    /**
+     * 分页获取板块下的所有帖子
+     * @param boardId
+     * @return
+     */
+    @Operation(summary = "分夜获取板块下的帖子", description = "根据板块 ID 获取所有帖子")
+    @GetMapping("/getArticlesPageByBoardId")
+    public ViewArticleResponse getAllArticlesPageByBoardId(
+            @Parameter(description = "板块 ID") @RequestParam Long boardId,
+            @NotNull Integer currentPage,@NotNull Integer pageSize) {
+        if(boardId == null || boardId < 0){
+            log.warn("板块 {} 不合法",boardId);
+            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
+        }
+        return articleService.getArticleCards(boardId,currentPage,pageSize);
+    }
+
 
     /**
      * 根据帖子id查询帖子详情
@@ -114,7 +132,7 @@ public class ArticleController {
 
     @GetMapping("/getAllArticlesByUserId")
     @Operation(summary = "获取用户所属帖子", description = "根据用户 ID 获取其下所有帖子列表，由前端控制传入的是当前用户还是查询的目标用户")
-    public List<ViewArticlesResponse> getAllArticlesByUserId(@Parameter(description = "用户ID")Long userId) {
+    public List<ArticleMetaCacheDTO> getAllArticlesByUserId(@Parameter(description = "用户ID")Long userId) {
         if(userId == null || userId < 0){
             log.warn("参数校验失败 userId:{}", userId);
             throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);

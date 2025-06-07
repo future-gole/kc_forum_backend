@@ -2,13 +2,18 @@ package com.doublez.kc_forum.common.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 @Configuration
+@EnableAsync(proxyTargetClass=true)
 public class AsyncConfig {
-    @Bean
+    public static final String DB_PERSISTENCE_EXECUTOR_NAME = "dbPersistenceExecutor";
+
+    @Bean(DB_PERSISTENCE_EXECUTOR_NAME)
     public Executor dbPersistenceExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(5);
@@ -18,4 +23,5 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
 }

@@ -1,6 +1,6 @@
 package com.doublez.kc_forum.service.impl;
 
-import com.doublez.kc_forum.common.pojo.response.ViewArticlesResponse;
+import com.doublez.kc_forum.common.pojo.response.ArticleMetaCacheDTO;
 import com.doublez.kc_forum.model.Article;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,7 +26,7 @@ class ArticleServiceImplTest {
 
     @Test
     void getAllArticlesByBoardId() {
-        List<ViewArticlesResponse> articles = articleService.getAllArticlesByBoardId(1L);
+        List<ArticleMetaCacheDTO> articles = articleService.getAllArticlesByBoardId(1L);
         System.out.println(articles.toString());
     }
 

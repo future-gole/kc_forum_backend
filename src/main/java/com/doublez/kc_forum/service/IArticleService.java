@@ -2,7 +2,8 @@ package com.doublez.kc_forum.service;
 
 import com.doublez.kc_forum.common.pojo.request.UpdateArticleRequest;
 import com.doublez.kc_forum.common.pojo.response.ArticleDetailResponse;
-import com.doublez.kc_forum.common.pojo.response.ViewArticlesResponse;
+import com.doublez.kc_forum.common.pojo.response.ArticleMetaCacheDTO;
+import com.doublez.kc_forum.common.pojo.response.ViewArticleResponse;
 import com.doublez.kc_forum.model.Article;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -24,14 +25,21 @@ public interface IArticleService {
     public void createArticle(Article article);
 
     /**
-     * 通过boardid查询其board下的所以article
+     * 通过boardid查询其board下的所有article
      * 组装成为ViewArticlesResponse返回
      * @param BoardId
-     * @return  List<ViewArticlesResponse>
+     * @return  List<ArticleMetaCacheDTO>
      */
-    List<ViewArticlesResponse> getAllArticlesByBoardId(@RequestParam(required = false)Long BoardId);
+    List<ArticleMetaCacheDTO> getAllArticlesByBoardId(@RequestParam(required = false)Long BoardId);
 
-
+    /**
+     * 通过boardid分页查询其board下的所有article
+     * @param boardId
+     * @param currentPage
+     * @param pageSize
+     * @return
+     */
+    public ViewArticleResponse getArticleCards(Long boardId, int currentPage, int pageSize);
     /**
      * 根据id获取帖子详情
      * @param id
@@ -44,7 +52,7 @@ public interface IArticleService {
      * @param userId
      * @return
      */
-    List<ViewArticlesResponse> getAllArticlesByUserId(Long userId);
+    List<ArticleMetaCacheDTO> getAllArticlesByUserId(Long userId);
     /**
      * 更新帖子
      * @param updateArticleRequest

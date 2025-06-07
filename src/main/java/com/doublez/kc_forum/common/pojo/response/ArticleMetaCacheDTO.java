@@ -5,7 +5,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-public class ViewArticlesResponse {
+public class ArticleMetaCacheDTO {
     private Long id;
     private Long boardId;
     private Long userId;

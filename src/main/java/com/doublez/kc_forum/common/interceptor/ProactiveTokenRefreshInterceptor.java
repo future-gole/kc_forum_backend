@@ -24,7 +24,7 @@ public class ProactiveTokenRefreshInterceptor implements HandlerInterceptor {
     private long proactiveRefreshThresholdMs;
 
     // 定义存储原始 Claims 的请求属性名称
-    public static final String CLAIMS_ATTRIBUTE = "Au";
+    public static final String CLAIMS_ATTRIBUTE = "Authorization";
     // 定义传递新 Access Token 的响应头名称
     public static final String NEW_ACCESS_TOKEN_ATTRIBUTE = "NewAccessToken";
 

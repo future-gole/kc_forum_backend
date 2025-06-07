@@ -1,23 +1,29 @@
-local userLikesKey = KEYS[1] -- 将传入的第一个键名赋值给局部变量 userLikesKey
-local countKey = KEYS[2]     -- 将传入的第二个键名赋值给局部变量 countKey
-local userId = ARGV[1]       -- 将传入的第一个参数值赋值给局部变量 userId
+-- KEYS[1]: 文章点赞者集合 Key (例如: article:likers:123)
+-- KEYS[2]: 文章 Hash Key (例如: article:123)
+-- ARGV[1]: userId (用户ID)
+-- ARGV[2]: likeCountFieldName (字符串, 例如: "likeCount")
 
-local saddResult = redis.call('SREM',userLikesKey,userId)
--- 成功
-if saddResult == 1 then
-    local newCount = redis.call('DECR',countKey)
-    -- count小于0置为0
+local articleLikersSetKey = KEYS[1]
+local articleHashKey = KEYS[2]
+local userId = ARGV[1]
+local likeCountField = ARGV[2]
+
+-- 尝试从点赞者集合中移除用户ID
+local sremResult = redis.call('SREM', articleLikersSetKey, userId)
+
+if sremResult == 1 then
+    -- 用户之前在集合中，成功移除。在Hash中减少点赞数。
+    local newCount = redis.call('HINCRBY', articleHashKey, likeCountField, -1)
     if tonumber(newCount) < 0 then
-        redis.call('SET',countKey,'0')
-        newCount = 0;
+        newCount = 0
+        redis.call('HSET', articleHashKey, likeCountField, '0') -- 确保点赞数不为负
     end
-    return {1,newCount}
-    --用户不在set中
+    return {1, newCount} -- 返回: {状态: 1 (成功取消点赞), 新的总点赞数}
 else
-    local currentCount = redis.call('GET',countKey)
-    -- 异常处理
+    -- 用户之前不在集合中 (未点赞或已取消)。从Hash中获取当前点赞数。
+    local currentCount = redis.call('HGET', articleHashKey, likeCountField)
     if not currentCount then
-        return {0,0}
+        return {0, 0} -- 如果计数不存在，返回0
     end
-    return {0,currentCount}
+    return {0, tonumber(currentCount)} -- 返回: {状态: 0 (本未点赞), 当前总点赞数}
 end
