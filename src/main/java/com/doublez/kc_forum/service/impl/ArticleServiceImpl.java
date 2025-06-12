@@ -27,7 +27,6 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.redis.core.*;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -40,14 +39,15 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static com.doublez.kc_forum.service.impl.LikesServiceImpl.DB_PERSISTENCE_EXECUTOR;
+import static com.doublez.kc_forum.common.utiles.AssertUtil.copyProperties;
 
 @Slf4j
 @Service
 public class ArticleServiceImpl implements IArticleService {
 
-    private static final long EMPTY_CACHE_TTL_MINUTES = 30;
+
     private static final String NULL_CACHE_MARKER = " ";
+    private static final String EMPTY_CACHE_CONTENT = " ";
     @Autowired
     private ArticleMapper articleMapper;
     @Lazy
@@ -65,6 +65,9 @@ public class ArticleServiceImpl implements IArticleService {
     @Autowired
     private RedisAsyncPopulationService redisAsync;
 
+    @Autowired
+    private DBAsyncPopulationService dbAsync;
+
     // 定义Hash字段名称常量
     public static final String FIELD_ID = "id";
     public static final String FIELD_BOARD_ID = "boardId";
@@ -77,6 +80,10 @@ public class ArticleServiceImpl implements IArticleService {
     public static final String FIELD_LIKE_COUNT = "likeCount";
     public static final String FIELD_VISIT_COUNT = "visitCount";
 
+    // 定义一个常量作为空结果的占位符
+    private static final String EMPTY_ARTICLE_ID_PLACEHOLDER = "-1";
+    // 定义空结果缓存的过期时间（15分钟）
+    private static final long EMPTY_CACHE_TTL_MINUTES = 15;
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
@@ -238,40 +245,48 @@ public class ArticleServiceImpl implements IArticleService {
         try { return Byte.parseByte(obj.toString()); } catch (NumberFormatException e) { log.warn("无法将 '{}' 解析为 Byte", obj); return null; }
     }
 
-    public ViewArticleResponse getArticleCards(Long boardId, int currentPage, int pageSize){
+    public ViewArticleResponse getArticleCards(Long boardId, int currentPage, int pageSize) {
 
         String boardArticlesZSetKey = RedisKeyUtil.getBoardArticlesZSetKey(boardId);
-        long start = (long)(currentPage - 1) * pageSize; // ZSETs are 0-indexed
+        long start = (long) (currentPage - 1) * pageSize; // ZSETs are 0-indexed
         long end = start + pageSize - 1;
         //1. 查询 articles id
         Long count = stringRedisTemplate.opsForZSet().zCard(boardArticlesZSetKey);
         List<Long> articleIdsInOrder;// 存储文章id
-        if(count == null || count == 0){
+        if (count == null || count == 0) {
+            log.debug("board中没有缓存文章数据，尝试从数据库中获取，board:{}",boardId);
             // 为空，尝试获取数据库
+            //todo 分页查询
             List<Article> articlesFromDb = articleMapper.selectList(
                     new LambdaQueryWrapper<Article>()
-                            .select(Article::getId,Article::getCreateTime)
+                            .select(Article::getId, Article::getCreateTime)
                             .eq(Article::getBoardId, boardId)
-                            .eq(Article::getDeleteState,0));
-            if(articlesFromDb.isEmpty()){
+                            .eq(Article::getDeleteState, 0));
+            if (articlesFromDb.isEmpty()) {
                 // 真的为空 直接返回，也可能board不存在
-                //todo 缓存穿透
-                return new ViewArticleResponse(null,0L);
+                //进行缓存穿透
+                stringRedisTemplate.opsForZSet().add(boardArticlesZSetKey, EMPTY_ARTICLE_ID_PLACEHOLDER, 0.0);
+                stringRedisTemplate.expire(boardArticlesZSetKey, EMPTY_CACHE_TTL_MINUTES, TimeUnit.MINUTES);
+                log.info("板块 {} 无文章，已设置缓存穿透占位符 {}，TTL {} 分钟", boardId, EMPTY_ARTICLE_ID_PLACEHOLDER, EMPTY_CACHE_TTL_MINUTES);
+                return new ViewArticleResponse(null, 0L);
             }
+            //设置count的值
+            count = (long) articlesFromDb.size();
             // 异步回填到redis中
-            redisAsync.boardZsetFromDBToRedis(boardArticlesZSetKey,articlesFromDb);
-
+            redisAsync.boardZsetFromDBToRedis(boardArticlesZSetKey, articlesFromDb);
+            //todo 这边不用再转了
             articleIdsInOrder = articlesFromDb.stream().map(Article::getId).collect(Collectors.toList());
-        }else {
+        } else {
             //不为空 从redis中查询
             Set<String> articleIdStrings = stringRedisTemplate.opsForZSet().reverseRange(boardArticlesZSetKey, start, end);
-            if (CollectionUtils.isEmpty(articleIdStrings)) {
-                // ZSET缓存未命中或该板块没有文章。可以尝试从数据库加载。
-                // 这里的数据库查询理想情况下也应该分页（如果是为了“填充ZSET”）。
-                // 为简单起见，如果ZSET为空，则假定此页面视图没有文章。
-                // 一个更健壮的解决方案是使用定时任务或写穿透来填充ZSET。
-                log.info("在ZSET {} 中未找到板块 {} 第 {} 页的文章ID", boardArticlesZSetKey, boardId, currentPage);
+            //判断是否是缓存空结果的占位符
+            if (articleIdStrings != null && articleIdStrings.size() == 1 && articleIdStrings.contains(EMPTY_ARTICLE_ID_PLACEHOLDER)) {
+                log.info("从ZSET {} 中获取到缓存穿透占位符，板块 {} 无文章", boardArticlesZSetKey, boardId);
+                return new ViewArticleResponse(null, 0L); // 返回空结果
+            }
 
+            if (CollectionUtils.isEmpty(articleIdStrings)) {
+                log.info("在ZSET {} 中未找到板块 {} 第 {} 页的文章ID", boardArticlesZSetKey, boardId, currentPage);
                 return new ViewArticleResponse(null, 0L);
             }
             //这个 articleIds 列表保持了从ZSET获取的顺序，这是最终结果的顺序依据
@@ -307,8 +322,10 @@ public class ArticleServiceImpl implements IArticleService {
                 }
             } else {
                 // 记录日志，rawHashObject可能为null或非Map类型
-                if (rawHashObject == null) log.debug("Redis Pipeline结果中 articleId: {} 的数据为null (缓存未命中)", currentId);
-                else log.debug("Redis Pipeline结果中 articleId: {} 的数据类型不为Map或为空Map (视为缓存未命中): {}", currentId, rawHashObject.getClass().getName());
+                if (rawHashObject == null)
+                    log.debug("Redis Pipeline结果中 articleId: {} 的数据为null (缓存未命中)", currentId);
+                else
+                    log.debug("Redis Pipeline结果中 articleId: {} 的数据类型不为Map或为空Map (视为缓存未命中): {}", currentId, rawHashObject.getClass().getName());
                 missedArticleIds.add(currentId);
             }
         }
@@ -323,7 +340,7 @@ public class ArticleServiceImpl implements IArticleService {
             for (Article dbArticle : dbArticles) {
                 if (dbArticle != null && dbArticle.getId() != null) {
                     foundArticlesMap.put(dbArticle.getId(), dbArticle); // 将从DB获取的数据也放入map
-                    log.info("从数据库获取文章 {} 成功，已回填缓存", dbArticle.getId());
+                    log.info("从数据库获取文章 {} 成功，开始回填缓存", dbArticle.getId());
                 }
             }
             // 异步回填缓存
@@ -343,7 +360,7 @@ public class ArticleServiceImpl implements IArticleService {
         }
 
         if (finalOrderedArticles.isEmpty()) {
-            return new ViewArticleResponse(null,0L);
+            return new ViewArticleResponse(null, 0L);
         }
         // 7. 获取作者信息
         List<Long> authorIds = finalOrderedArticles.stream()
@@ -351,11 +368,10 @@ public class ArticleServiceImpl implements IArticleService {
                 .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.toList());
-        Map<Long, UserArticleResponse> userMap = fetchAndCacheUsers(authorIds);
+        Map<Long, UserArticleResponse> userMap = userServiceImpl.fetchAndCacheUsers(authorIds);
         // 8. 组装响应
         List<ArticleMetaCacheDTO> responseList = new ArrayList<>();
         for (Article meta : finalOrderedArticles) { // 使用最终排序好的列表
-            // ... (组装 ArticleMetaCacheDTO 的逻辑保持不变)
             // 确保从 meta 对象中获取所有需要的字段
             ArticleMetaCacheDTO resp = new ArticleMetaCacheDTO();
             resp.setId(meta.getId());
@@ -365,7 +381,7 @@ public class ArticleServiceImpl implements IArticleService {
             resp.setIsTop(meta.getIsTop());
             resp.setCreateTime(meta.getCreateTime());
             resp.setUpdateTime(meta.getUpdateTime());
-            resp.setVisitCount(meta.getVisitCount()); // 这些应该从Article对象中获取
+            resp.setVisitCount(meta.getVisitCount());
             resp.setLikeCount(meta.getLikeCount());
             resp.setReplyCount(meta.getReplyCount());
 
@@ -377,416 +393,9 @@ public class ArticleServiceImpl implements IArticleService {
             resp.setUser(userCache);
             responseList.add(resp);
         }
-        return new ViewArticleResponse(responseList,count);
-
-
-//        List<Long> articleIds;
-//        //1.1 判空
-//        if(CollectionUtils.isEmpty(articleIdStrings)){
-//            //1.1.1查询数据库
-//            List<Article> articles = articleMapper.selectList(
-//                    new LambdaQueryWrapper<Article>()
-//                            .select(Article::getId)
-//                            .eq(Article::getBoardId, boardId).
-//                            eq(Article::getDeleteState, 0));
-//            articleIds = articles.stream().map(Article::getId).collect(Collectors.toList());
-//            //1.1.2回填到redis中
-//            stringRedisTemplate.opsForZSet().add(boardArticlesZSetKey,
-//                            articleIds.stream().map(id -> new DefaultTypedTuple<>(id.toString(),id.doubleValue()))
-//                            .collect(Collectors.toSet()));
-//        }else {
-//            //1.1.3 不为空 转化一下类型
-//            articleIds = articleIdStrings.stream().map(Long::parseLong).toList();
-//        }
-//        //1.1.4 如果此时为空那就是真的为空
-//        if(CollectionUtils.isEmpty(articleIds)){
-//            return new ArrayList<>();
-//        }
-//        //2. 从redis中批量获取文章数据
-//        //2.1 批量从Redis获取文章元数据缓存
-//        List<ArticleMetaCacheDTO> articleMetaList = fetchAndCacheArticleMetasByIds(articleIds);
-//
-//        //2.2 去重作者id
-//        List<Long> authorIdsList = articleMetaList.stream().
-//                map(ArticleMetaCacheDTO::getUserId)
-//                .filter(Objects::nonNull)
-//                .collect(Collectors.toList());
-//        //3. 获取作者信息缓存
-//        Map<Long,UserArticleResponse> userMap = fetchAndCacheUsers(authorIdsList);
-//
-//        //4. 获取点赞数、访问量计数
-//        Map<Long, Integer> visitCountsMap = fetchVisitUsingPipeline(articleIds);
-//        Map<Long, Integer> likeCountsMap = fetchLikeUsingPipeline(articleIds);
-//
-//        //5. 组合 ArticleMetaCacheDTO 列表
-//        List<ArticleMetaCacheDTO> responseList = new ArrayList<>();
-//
-//        for(int i = 0; i < articleMetaList.size(); i++){
-//            ArticleMetaCacheDTO meta = articleMetaList.get(i);
-//            if(meta == null){
-//                log.warn("文章元数据为空，i:{}",i);
-//                continue;
-//            }
-//            Long articleId = meta.getId();
-//            ArticleMetaCacheDTO resp = new ArticleMetaCacheDTO();
-//            resp.setId(meta.getId());
-//            resp.setBoardId(meta.getBoardId());
-//            resp.setUserId(meta.getUserId());
-//            resp.setTitle(meta.getTitle());
-//            resp.setIsTop(meta.getIsTop());
-//            resp.setCreateTime(meta.getCreateTime());
-//            resp.setUpdateTime(meta.getUpdateTime());
-//            // 访问量和点赞数
-//            resp.setVisitCount(visitCountsMap.getOrDefault(articleId, 0)); // 默认值处理
-//            resp.setLikeCount(likeCountsMap.getOrDefault(articleId, 0)); // 默认值处理
-//
-//            //用户
-//            UserArticleResponse userCache = userMap.get(meta.getUserId());
-//            if(userCache == null){
-//                log.warn("文章的用户信息不存在，articleId:{},userId:{}",articleId,meta.getUserId());
-//                //todo 是否需要默认？
-//                continue;
-//            }
-//            resp.setUser(userCache);
-//            responseList.add(resp);
-//        }
-//        return responseList;
+        return new ViewArticleResponse(responseList, count);
     }
 
-//    private Map<Long, Integer> fetchLikeUsingPipeline(List<Long> articleIds) {
-//        //1. 判空
-//        if(CollectionUtils.isEmpty(articleIds)){
-//            return Collections.emptyMap();
-//        }
-//        //2. key,提取初始化
-//        List<String> likeKey = new ArrayList<>(articleIds.size());
-//        for(Long articleId: articleIds){
-//            likeKey.add(RedisKeyUtil.getTargetLikeCountKey("article",articleId));
-//        }
-//        //3. redis中查询
-//        List<String> likeJsonList = stringRedisTemplate.opsForValue().multiGet(likeKey);
-//
-//        //3.1 没有查询到
-//        if(CollectionUtils.isEmpty(likeJsonList)){
-//            //todo
-//            return Collections.emptyMap();
-//        }
-//        Map<Long, Integer> likeCountsMap = new HashMap<>(likeJsonList.size());
-//        for(int i = 0; i < likeJsonList.size(); i++){
-//            String likeJson = likeJsonList.get(i);
-//            Long articleId = articleIds.get(i);
-//            //todo visit 应该是long
-//            likeCountsMap.put(articleId,Integer.parseInt(likeJson));
-//        }
-//        return likeCountsMap;
-//    }
-
-//    private Map<Long, Integer> fetchVisitUsingPipeline(List<Long> articleIds) {
-//        //1. 判空
-//        if(CollectionUtils.isEmpty(articleIds)){
-//            return Collections.emptyMap();
-//        }
-//        //2. key,提取初始化
-//        List<String> visitKey = new ArrayList<>(articleIds.size());
-//        for(Long articleId: articleIds){
-//            visitKey.add(RedisKeyUtil.getArticleVist(articleId));
-//        }
-//        //3. redis中查询
-//        List<String> visitJsonList = stringRedisTemplate.opsForValue().multiGet(visitKey);
-//
-//        //3.1 没有查询到
-//        if(CollectionUtils.isEmpty(visitJsonList)){
-//            //todo
-//            return Collections.emptyMap();
-//        }
-//        Map<Long, Integer> visitCountsMap = new HashMap<>(visitJsonList.size());
-//        for(int i = 0; i < visitJsonList.size(); i++){
-//            String visitJson = visitJsonList.get(i);
-//            Long articleId = articleIds.get(i);
-//            //todo visit 应该是long
-//            visitCountsMap.put(articleId,Integer.parseInt(visitJson));
-//        }
-//        return visitCountsMap;
-//    }
-
-    /**
-     * 获取并缓存用户信息。
-     */
-    private Map<Long, UserArticleResponse> fetchAndCacheUsers(List<Long> userIds) {
-        if (CollectionUtils.isEmpty(userIds)) {
-            return Collections.emptyMap();
-        }
-        Map<Long, UserArticleResponse> userMap = new HashMap<>();
-        List<String> userKeys = userIds.stream().map(RedisKeyUtil::getUserResponseKey).toList();
-
-        // 使用Pipeline的MGET获取用户JSON字符串
-        List<Object> userJsonListObjects = stringRedisTemplate.executePipelined(
-                (RedisCallback<Object>) connection -> {
-                    for (String userKey : userKeys) {
-                        connection.stringCommands().get(userKey.getBytes(StandardCharsets.UTF_8));
-                    }
-                    return null;
-                });
-
-
-        List<Long> missedUserIds = new ArrayList<>();
-        for (int i = 0; i < userIds.size(); i++) {
-            Long currentUserId = userIds.get(i);
-            // Pipeline返回的是List<Object>，需要处理null和类型转换
-            String userJson = null;
-            if (userJsonListObjects != null && i < userJsonListObjects.size() && userJsonListObjects.get(i) != null) {
-                Object element = userJsonListObjects.get(i);
-                if (element instanceof String) { // 主要检查 String 类型
-                    userJson = (String) element;
-                } else {
-                    log.error("不是期望的用户数据类型:{} ", element.getClass().getName());
-                }
-            }
-            if (StringUtils.hasText(userJson) && !"null".equalsIgnoreCase(userJson)) { // 检查 "null" 字符串
-                try {
-                    UserArticleResponse user = objectMapper.readValue(userJson, UserArticleResponse.class);
-                    userMap.put(currentUserId, user);
-                } catch (JsonProcessingException e) {
-                    log.error("解析用户ID {} 的JSON失败: {}", currentUserId, e.getMessage());
-                    missedUserIds.add(currentUserId);
-                }
-            } else {
-                missedUserIds.add(currentUserId);
-            }
-        }
-
-        if (!missedUserIds.isEmpty()) {
-            log.info("用户缓存未命中，ID列表: {}", missedUserIds);
-
-             Map<Long,User> dbUsers = userServiceImpl.selectUserInfoByIds(missedUserIds);
-             for (User dbUser : dbUsers.values()) {
-               UserArticleResponse uar = copyProperties(dbUser, UserArticleResponse.class);
-               userMap.put(dbUser.getId(), uar);
-               redisAsync.cacheUser(uar);
-             }
-        }
-        return userMap;
-    }
-//    private Map<Long,UserArticleResponse> fetchAndCacheUsers(List<Long> authorIdsList) {
-//        //1. 判空
-//        if(CollectionUtils.isEmpty(authorIdsList)){
-//            return Collections.emptyMap();
-//        }
-//        //2. key,提取初始化
-//        List<String> userKey = new ArrayList<>(authorIdsList.size());
-//        for(Long authorId: authorIdsList){
-//            userKey.add(RedisKeyUtil.getUserResponseKey(authorId));
-//        }
-//        //3. redis中查询
-//        List<String> userJsonList = stringRedisTemplate.opsForValue().multiGet(userKey);
-//        //todo 名字是否要改
-//        Map<Long, UserArticleResponse> userMap = new HashMap<>(userJsonList.size());
-//
-//        //3.1 没有查询到
-//        if(CollectionUtils.isEmpty(userJsonList)){
-//            //todo
-//            return Collections.emptyMap();
-//        }
-//
-//        for(String userJson: userJsonList){
-//            try {
-//                UserArticleResponse userCacheDTO = objectMapper.readValue(userJson,UserArticleResponse.class);
-//                if(userCacheDTO != null){
-//                    userMap.put(userCacheDTO.getId(), userCacheDTO);
-//                }else{
-//                    log.warn("用户数据反序列化后为 null (JSON string was 'null'), userJson: {}", userJson);
-//                }
-//            } catch (JsonProcessingException e) {
-//                log.error("用户数据(UserCacheDTO)转化异常, json: [{}], e:{}", userJson, e.getMessage());
-//            }
-//        }
-//        return userMap;
-//    }
-
-//    private List<ArticleMetaCacheDTO> fetchAndCacheArticleMetasByIds(List<Long> articleIds) {
-//        //1. 判空
-//        if(CollectionUtils.isEmpty(articleIds)){
-//            return Collections.emptyList();
-//        }
-//        //2. key,提取初始化
-//        List<String> metaKeyList = articleIds.stream().map(RedisKeyUtil::getArticleMeta).collect(Collectors.toList());
-//        //3. redis中进行查询
-//        List<String> metaCache = stringRedisTemplate.opsForValue().multiGet(metaKeyList);
-//
-//        Map<Long, ArticleMetaCacheDTO> resultMap = new HashMap<>();
-//        List<Long> missedIds = new ArrayList<>();
-//        Map<String, ArticleMetaCacheDTO> metasToCache = new HashMap<>();
-//
-//        for (int i = 0; i < metaCache.size(); i++) {
-//            String currentMetaJson = metaCache.get(i);
-//            if (currentMetaJson != null) {
-//                resultMap.put();
-//            } else {
-//                missedIds.add(currentId);
-//            }
-//        }
-//
-//        //3.1 没有查询到
-//        if(CollectionUtils.isEmpty(metaCache)){
-//            log.warn("未在redis中查询到文章元数据");
-//            //查询数据库
-//            return ;
-//        }
-//        //4. 返回
-//        return metaCache.stream().map(o -> {
-//            if(o == null){
-//                //查询数据库回填数据
-//                return null;
-//            }
-//            try {
-//                return objectMapper.readValue(o,ArticleMetaCacheDTO.class);
-//            } catch (JsonProcessingException e) {
-//                log.error("文章meta元数据转化移除，e:{}",e.getMessage());
-//                return null;
-//            }
-//        }).toList();
-//
-//    }
-
-//    public Page<ArticleMetaCacheDTO> getArticleCardsByBoard(Long boardId, int currentPage, int pageSize) {
-//        String boardArticlesZSetKey = RedisKeyUtil.getBoardArticlesZSetKey(boardId);
-//        long start = (long)(currentPage - 1) * pageSize; // ZSETs are 0-indexed
-//        long end = start + pageSize - 1;
-//
-//        // 1. 从 Redis ZSET 获取文章 ID 列表 (按score降序，假设score是时间戳)
-//        Set<String> articleIdStrings = stringRedisTemplate.opsForZSet().reverseRange(boardArticlesZSetKey, start, end);
-//
-//        List<Long> articleIds;
-//        long totalArticlesInBoard; // 用于分页总数
-//
-//        if (CollectionUtils.isEmpty(articleIdStrings)) {
-//            // todo ZSET 为空或不存在，可以考虑从数据库加载并回填ZSET (冷启动或缓存重建)
-//            // 并可选地填充 ZSET
-//            Page<Article> articlesFromDbFallback = fallbackToDbAndPotentiallyWarmZSet(boardId, currentPage, pageSize, boardArticlesZSetKey);
-//            if (articlesFromDbFallback == null || CollectionUtils.isEmpty(articlesFromDbFallback.getRecords())) {
-//                return new Page<>(currentPage, pageSize, 0);
-//            }
-//            articleIds = articlesFromDbFallback.getRecords().stream().map(Article::getId).collect(Collectors.toList());
-//            totalArticlesInBoard = articlesFromDbFallback.getTotal();
-//        } else {
-//            articleIds = articleIdStrings.stream().map(Long::parseLong).collect(Collectors.toList());
-//            // 获取 ZSET 中的总文章数用于分页
-//            Long zsetSize = stringRedisTemplate.opsForZSet().zCard(boardArticlesZSetKey);
-//            totalArticlesInBoard = (zsetSize != null) ? zsetSize : 0;
-//        }
-//
-//        if (CollectionUtils.isEmpty(articleIds)) {
-//            return new Page<>(currentPage, pageSize, totalArticlesInBoard);
-//        }
-//
-//        // --- 后续步骤与之前类似，但获取 Article 基础信息的方式可能变化 ---
-//
-//        // 2. 批量从Redis获取文章元数据缓存
-//        // 注意：现在我们只有ID，所以如果ArticleMetaCacheDTO未命中，需要从DB根据ID批量获取Article
-//        Map<Long, ArticleMetaCacheDTO> articleMetaMap = fetchAndCacheArticleMetasByIds(articleIds);
-//
-//        // 收集作者ID
-//        Set<Long> authorIdsSet = articleMetaMap.values().stream()
-//                .map(ArticleMetaCacheDTO::getUserId)
-//                .filter(Objects::nonNull)
-//                .collect(Collectors.toSet());
-//
-//        // 3. 批量获取用户信息缓存
-//        Map<Long, UserCacheDTO> userMap = fetchAndCacheUsers(authorIdsSet); // 这个方法可以复用
-//
-//        // 4. 批量获取各项计数
-//        Map<Long, Integer> visitCountsMap = fetchCountsUsingPipeline(articleIds, RedisKeyUtil::getArticleRead);
-//        Map<Long, Integer> likeCountsMap = fetchCountsUsingPipeline(articleIds, id -> RedisKeyUtil.getTargetLikeCountKey(RedisKeyUtil.TARGET_TYPE_ARTICLE, id));
-//        // replyCount 仍然需要从 ArticleMetaCacheDTO 或 Article 实体获取 (如果它在这些对象中)
-//        // 或者你也为 replyCount 维护单独的 Redis 计数器
-//
-//        // 5. 组装 ArticleMetaCacheDTO 列表
-//        List<ArticleMetaCacheDTO> responseList = new ArrayList<>();
-//        for (Long articleId : articleIds) { // 保持从 ZSET 获取的顺序
-//            ArticleMetaCacheDTO meta = articleMetaMap.get(articleId);
-//            if (meta == null) {
-//                // 理论上 fetchAndCacheArticleMetasByIds 应该处理了这个问题
-//                // 如果仍然为 null，可能意味着文章在获取meta时被删除了，或者DB中不存在
-//                System.err.println("Warning: ArticleMetaCacheDTO not found for articleId: " + articleId + " after attempting fetch.");
-//                continue;
-//            }
-//
-//            ArticleMetaCacheDTO resp = new ArticleMetaCacheDTO();
-//            resp.setId(meta.getId());
-//            resp.setBoardId(meta.getBoardId()); // meta DTO 需要包含 boardId
-//            resp.setUserId(meta.getUserId());
-//            resp.setTitle(meta.getTitle());
-//            resp.setIsTop(meta.getIsTop());
-//            resp.setCreateTime(meta.getCreateTime());
-//            resp.setUpdateTime(meta.getUpdateTime());
-//
-//            // 访问量和点赞数
-//            resp.setVisitCount(visitCountsMap.getOrDefault(articleId, 0)); // 默认值处理
-//            resp.setLikeCount(likeCountsMap.getOrDefault(articleId, 0)); // 默认值处理
-//
-//            // 回复数: 假设 ArticleMetaCacheDTO 包含 replyCount
-//            // 如果不包含，你需要决定从哪里获取。如果DB是权威，且ArticleMetaCacheDTO从DB同步，它应该有。
-//            // 或者像其他计数一样，单独在Redis维护。
-//            // resp.setReplyCount(meta.getReplyCount()); // 假设 meta 包含
-//
-//            // 从DB获取的Article实体中取replyCount (如果meta中没有)
-//            // 这个场景下，如果meta miss后从DB加载了Article，replyCount就有了
-//            // 如果你的 ArticleMetaCacheDTO 设计为包含 replyCount，这里就可以直接用
-//            // 为简化，我们假设 ArticleMetaCacheDTO 中包含了 replyCount
-//            if (meta instanceof ArticleMetaWithReplyCount) { // 假设有这样一个子类或字段
-//                resp.setReplyCount(((ArticleMetaWithReplyCount)meta).getReplyCount());
-//            } else {
-//                // Fallback: 如果你的ArticleMetaCacheDTO不直接存replyCount，
-//                // 你可能需要从数据库加载的完整Article对象中获取，或者默认为0，或者单独查询
-//                // 在 fetchAndCacheArticleMetasByIds 中如果从DB回填，应确保replyCount被填充
-//                // 暂时设定为0，需要根据你的 DTO 设计调整
-//                resp.setReplyCount(0);
-//            }
-//
-//
-//            UserCacheDTO userCache = userMap.get(meta.getUserId());
-//            if (userCache != null) {
-//                UserArticleResponse userResp = convertUserCacheToResponse(userCache);
-//                resp.setUser(userResp);
-//            } else if (meta.getUserId() != null) {
-//                UserArticleResponse defaultUser = new UserArticleResponse();
-//                defaultUser.setId(meta.getUserId());
-//                defaultUser.setNickName("用户不存在"); // 或者其他默认提示
-//                resp.setUser(defaultUser);
-//            }
-//            responseList.add(resp);
-//        }
-//
-//        Page<ArticleMetaCacheDTO> resultPage = new Page<>(currentPage, pageSize, totalArticlesInBoard);
-//        resultPage.setRecords(responseList);
-//        return resultPage;
-//    }
-
-//    public List<ArticleMetaCacheDTO> getAllArticlesByBoardId(@RequestParam(required = false) Long id) {
-//        //1. 获取id
-//        List<Article> articleIds = articleMapper.selectList(
-//                new LambdaQueryWrapper<Article>()
-//                        .select(Article::getId)
-//                        .eq(Article::getBoardId, id)
-//                        .eq(Article::getDeleteState, 0));
-//        //2. 存储key
-//        List<String> metaKeysList = new ArrayList<>();
-//        List<String> ReadKeysList = new ArrayList<>();
-//        List<String> LikeKeysList = new ArrayList<>();
-//        for(Article article : articleIds){
-//            metaKeysList.add(RedisKeyUtil.getArticleMeta(article.getId()));
-//            ReadKeysList.add(RedisKeyUtil.getArticleRead(article.getId()));
-//            LikeKeysList.add(RedisKeyUtil.getTargetLikeCountKey("article", article.getId()));
-//        }
-//        //3. pipeline 查询redis
-//        stringRedisTemplate.executePipelined(
-//                (RedisCallback<Object>) connection ->{
-//                    for(String metaKey : metaKeysList){
-//                        connection.hGetAll()
-//                    }
-//                }
-//        )
-//    }
     @Override
     public List<ArticleMetaCacheDTO> getAllArticlesByBoardId(@RequestParam(required = false) Long id) {
         // 1. 查询 Article 表,
@@ -831,7 +440,6 @@ public class ArticleServiceImpl implements IArticleService {
         Map<Long,User> userMap = userServiceImpl.selectUserInfoByIds(userIds);
 
         // 3. 组装数据
-
         List<ArticleMetaCacheDTO> articleMetaCacheDTO = articles.stream().map(article -> {
             User user = userMap.get(article.getUserId());
             //判断用户是否存在
@@ -857,6 +465,7 @@ public class ArticleServiceImpl implements IArticleService {
 
         //1.1 判断是否是缓存穿透情况
         if(NULL_CACHE_MARKER.equals(content)){
+            log.info("命中缓存穿透：articleId: {}",articleId);
             throw new BusinessException(ResultCode.FAILED_ARTICLE_NOT_EXISTS);
         }
 
@@ -867,7 +476,7 @@ public class ArticleServiceImpl implements IArticleService {
         ArticleDetailResponse articleDetailResponse = null;
         //2. 有一个为空就直接查数据库
         if(content == null|| CollectionUtils.isEmpty(articleMetaMap)){
-            log.debug("文章{} 未缓存，查询数据库",articleId);
+            log.info("文章 {} 未缓存，查询数据库",articleId);
             //2.1 查询数据库
             Article article = articleMapper.selectOne(
                     new LambdaQueryWrapper<Article>()
@@ -875,7 +484,8 @@ public class ArticleServiceImpl implements IArticleService {
                             .eq(Article::getDeleteState, 0).eq(Article::getState, 0));
             //2.2 文章确实不存在，进行执行缓存穿透
             if(article == null){
-                stringRedisTemplate.opsForValue().set(articleContentKey," ",EMPTY_CACHE_TTL_MINUTES , TimeUnit.MINUTES);
+                log.debug("查询到不存在的文章，进行缓存穿透设置 content:{},articleId:{},TTL:{} 分钟",EMPTY_CACHE_CONTENT,articleId,EMPTY_CACHE_TTL_MINUTES);
+                stringRedisTemplate.opsForValue().set(articleContentKey,EMPTY_CACHE_CONTENT,EMPTY_CACHE_TTL_MINUTES , TimeUnit.MINUTES);
                 throw new BusinessException(ResultCode.FAILED_ARTICLE_NOT_EXISTS);
             }
             articleDetailResponse = copyProperties(article, ArticleDetailResponse.class);
@@ -908,12 +518,14 @@ public class ArticleServiceImpl implements IArticleService {
         //4.1 判断是否命中缓存
         if(StringUtils.hasText(userJson)){
             try {
+                log.info("用户缓存命中，进行类型转化，id:{}",articleDetailResponse.getUserId());
                 articleDetailResponse.setUser(objectMapper.readValue(userJson,UserArticleResponse.class));
             } catch (JsonProcessingException e) {
                 log.error("解析用户ID {} 的JSON失败: {}", articleDetailResponse.getUserId(), e.getMessage());
             }
         }else {
             //4.2 未命中查询数据库
+            log.info("用户缓存未命中，查询数据库，id:{}",articleDetailResponse.getUserId());
             User user = userServiceImpl.selectUserInfoById(articleDetailResponse.getUserId());
             AssertUtil.checkClassNotNull(user,ResultCode.FAILED_USER_NOT_EXISTS,articleDetailResponse.getUserId());
             UserArticleResponse userArticleResponse = copyProperties(user, UserArticleResponse.class);
@@ -926,8 +538,10 @@ public class ArticleServiceImpl implements IArticleService {
         if(userId.equals(articleDetailResponse.getUserId())){
             articleDetailResponse.setOwn(true);
         }
-        //异步增加访问数量
+        //异步增加redis访问数量
         redisAsync.incrVisit(articleDetailResponse.getId());
+        //todo 异步增加数据库访问数量
+        dbAsync.updateArticleVisitCount(articleDetailResponse.getId());
         //更新返回给前端的帖子访问次数
         articleDetailResponse.setVisitCount(articleDetailResponse.getVisitCount()+1);
 
@@ -966,6 +580,7 @@ public class ArticleServiceImpl implements IArticleService {
     @Transactional
     @Override
     public boolean updateArticle(UpdateArticleRequest updateArticleRequest) {
+        //1. 更新数据库
         Article article = articleMapper.selectOne(new LambdaQueryWrapper<Article>()
                 .select(Article::getDeleteState, Article::getState)
                 .eq(Article::getId,updateArticleRequest.getId()));
@@ -976,63 +591,81 @@ public class ArticleServiceImpl implements IArticleService {
             log.warn("帖子被删除, id:{}",updateArticleRequest.getId());
             throw new BusinessException(ResultCode.FAILED_ARTICLE_NOT_EXISTS);
         }
-        if(articleMapper.updateById(copyProperties(updateArticleRequest, Article.class)) == 1){
-            log.info("帖子更新成功：{}",updateArticleRequest.getId());
-            return true;
+        LocalDateTime now = LocalDateTime.now();
+        int update = articleMapper.update(new LambdaUpdateWrapper<Article>()
+                .set(Article::getTitle, updateArticleRequest.getTitle())
+                .set(Article::getContent, updateArticleRequest.getContent())
+
+                .set(Article::getUpdateTime, now)
+                .eq(Article::getId, updateArticleRequest.getId()));
+        if(update != 1){
+            log.error("帖子更新失败,articleId:{}",updateArticleRequest.getId());
+            throw new SystemException(ResultCode.FAILED_UPDATE_ARTICLE);
         }
-        throw new SystemException(ResultCode.FAILED_UPDATE_ARTICLE);
+        log.info("帖子DB更新成功：articleId{}",updateArticleRequest.getId());
+        //2. 更新redis
+        //2.1 只更新title和updateTime
+        Map<String, Object> updates = new HashMap<>();
+        updates.put(FIELD_TITLE, updateArticleRequest.getTitle());
+        updates.put(FIELD_UPDATE_TIME,now);
+        redisTemplate.opsForHash().putAll(RedisKeyUtil.getArticleKey(updateArticleRequest.getId()),updates);
+        //2.2 如果content存在那么删除，下次需要的时候再缓存
+        Boolean delete = stringRedisTemplate.delete(RedisKeyUtil.getArticleContentKey(updateArticleRequest.getId()));
+        if(!delete){
+            log.error("从redis中删除文章 {} 内容失败",updateArticleRequest.getId());
+        }
+        log.info("帖子 redis 更新成功，articleId:{}",updateArticleRequest.getId());
+        return true;
     }
 
     @Transactional
     @Override
-    public boolean deleteArticle(Long id) {
+    public boolean deleteArticle(Long articleId,Long boardId) {
         //鉴权由controller层负责
-
-        // 先检查记录是否存在
-        Article article = articleMapper.selectById(id);
+        //1. 先删除数据库
+        //1.1 先检查记录是否存在
+        Article article = articleMapper.selectById(articleId);
         if (article == null) {
-            log.warn("删除帖子失败, 帖子不存在, id: {}", id);
+            log.warn("删除帖子失败, 帖子不存在, id: {}", articleId);
             throw new BusinessException(ResultCode.FAILED_ARTICLE_NOT_EXISTS);
         }
         if(article.getDeleteState() == 1){
-            log.error("帖子已经被删除，id：{}",id);
+            log.error("帖子已经被删除，id：{}",articleId);
             throw new BusinessException(ResultCode.FAILED_ARTICLE_NOT_EXISTS);
         }
         // 执行删除操作
         if( articleMapper.update(new LambdaUpdateWrapper<Article>()
                 .set(Article::getDeleteState, 1)
-                .eq(Article::getId, id)) != 1){
-            log.warn("删除文章失败, id: {}", id);
+                .eq(Article::getId, articleId)) != 1){
+            log.warn("删除文章失败, id: {}", articleId);
             throw new SystemException(ResultCode.FAILED_ARTICLE_DELETE);
         }
-
         //更新用户发帖数量
         userServiceImpl.updateOneArticleCountById(article.getUserId(),-1);
 
         //更新板块发帖数量
         boardServiceImpl.updateOneArticleCountById(article.getBoardId(),-1);
 
+        //2. 删除redis缓存
+        try {
+            Long deleteInBoard = stringRedisTemplate.opsForZSet().remove(RedisKeyUtil.getBoardArticlesZSetKey(boardId),articleId.toString());
+            if(deleteInBoard == null || deleteInBoard != 1){
+                log.error("删除redis board中的article失败,articleId:{},boardId:{}",articleId,boardId);
+            }
+        Boolean delete = redisTemplate.delete(RedisKeyUtil.getArticleKey(articleId));
+        if(!delete){
+                log.error("删除redis articleMeta缓存失败,articleId:{}",articleId);
+            }
+        delete = stringRedisTemplate.delete(RedisKeyUtil.getArticleContentKey(articleId));
+            if(!delete){
+                log.error("删除redis articleMeta缓存失败,articleId:{}",articleId);
+            }
+        } catch (Exception e) {
+            log.error("删除文章redis缓存失败,articleId:{}",articleId,e);
+            throw new SystemException(ResultCode.FAILED_ARTICLE_DELETE);
+        }
         //打印日志
         log.info("删帖成功,帖子id: {} ,用户id：{}, 板块id:{}",article.getId(), article.getUserId() ,article.getBoardId());
         return true;
-    }
-    @Override
-    public int updateLikeCount(Long targetId, int increment){
-        return articleMapper.update(new LambdaUpdateWrapper<Article>()
-                .eq(Article::getId,targetId)
-                .eq(Article::getDeleteState,0)
-                .eq(Article::getState,0)
-                .setSql("like_count = like_count + " + increment));
-    }
-    // 类型转化抽取出来的通用方法
-    private <Source, Target> Target copyProperties(Source source, Class<Target> targetClass) {
-        try {
-            Target target = targetClass.getDeclaredConstructor().newInstance(); // 使用反射创建实例
-            BeanUtils.copyProperties(source, target);
-            return target;
-        } catch (Exception e) {
-            log.error("类型转换失败: {} -> {}", source.getClass().getName(), targetClass.getName(), e);
-            throw new SystemException(ResultCode.ERROR_TYPE_CHANGE);
-        }
     }
 }

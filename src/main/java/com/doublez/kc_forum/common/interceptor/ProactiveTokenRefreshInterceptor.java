@@ -31,9 +31,7 @@ public class ProactiveTokenRefreshInterceptor implements HandlerInterceptor {
     /**
      * 在 preHandle 中，如果 Token 验证通过 (未过期且有效)，
      * 将解析出的 Claims 存入 request attribute，供 postHandle 使用。
-     * 注意：这个 preHandle 应该在你原来的认证拦截器 *之后* 执行，
-     * 或者将这部分逻辑合并到你的认证拦截器 preHandle 的成功路径中。
-     * 这里假设认证拦截器已将 Claims 存入 attribute。
+     * 注意：这个 preHandle 应该在原来的认证拦截器 之后 执行，
      *
      * 检查 Access Token 是否接近过期，如果是，生成新 Token 并放入响应头。
      *

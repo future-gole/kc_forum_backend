@@ -3,12 +3,12 @@
 <mapper namespace="com.doublez.kc_forum.mapper.MessageMapper">
 
     <!-- 定义ResultMap，将查询结果映射到RecentConversationsResponse DTO -->
-    <!-- type 属性指向您的 DTO 类的全限定名 -->
+    <!-- type 属性指向 DTO 类的全限定名 -->
     <resultMap id="recentConversationsResultMap" type="com.doublez.kc_forum.common.pojo.response.RecentConversationsResponse">
         <!-- id 标签用于映射主键字段 -->
         <id column="id" property="id"/>
         <!-- result 标签用于映射其他字段 -->
-        <!-- column: SQL 查询结果中的列名 (通常是 AS 后的别名) -->
+        <!-- column: SQL 查询结果中的列名 -->
         <!-- property: DTO 类中的字段名 -->
         <result column="contactId" property="contactId"/>
         <result column="contactNickname" property="contactNickname"/>
@@ -21,7 +21,6 @@
     <!-- SQL查询：获取指定用户的最近会话列表 -->
     <!-- id 属性必须与 Mapper 接口中的方法名一致 -->
     <!-- resultMap 属性指向上面定义的 resultMap 的 id -->
-    <!-- SQL查询：获取指定用户的最近会话列表 (兼容 MySQL 5.x) -->
     <select id="getRecentConversations" resultMap="recentConversationsResultMap">
         SELECT
             m.id AS id,

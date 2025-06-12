@@ -39,7 +39,7 @@ public class JwtUtil {
     private static final Key key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
 
 
-    private static final Integer expiration = 1800000;
+    private static final Integer expiration = 180000000;
 
     public static final String USER_ID = "Id";
     public static final String EMAIL = "email";

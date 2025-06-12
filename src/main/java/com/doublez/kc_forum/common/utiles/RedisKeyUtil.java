@@ -15,6 +15,10 @@ public class RedisKeyUtil {
     // 板块相关
     private static final String FIELD_ARTICLES_ZSET = "articles:zset"; // 板块下的文章ID集合 (ZSET)，保持不变
 
+    //回复贴
+    private static final String TOP_REPLIES = "top_replies:zset";
+    private static final String PREFIX_PARENT_REPLY = "reply";
+    private static final String CHILDREN_REPLY = "children:zset";
     /**
      * 存储所有文章元数据和计数的 Hash 的 Key。
      * 例如: article:101 -> HASH {id:101, title:"..", likeCount:10, ...}
@@ -34,17 +38,11 @@ public class RedisKeyUtil {
     /**
      * 存储点赞了特定文章的用户 ID 集合 (Set) 的 Key。
      * 例如: article:likers:101 -> {userId1, userId2}
-     * 这取代了之前的 `likes:user_target_set:article:{id}`，使得与文章相关的上下文更清晰。
-     * 如果你喜欢旧的命名方式，可以保留，但Lua脚本需要知道文章的 *主哈希键* 来更新其 likeCount 字段。
      */
     public static String getArticleLikersSetKey(Long articleId) {
         return PREFIX_ARTICLE + SPLIT + FIELD_LIKERS_SET + SPLIT + articleId;
     }
 
-    // --- 通用目标点赞的 Key (如果你也需要点赞评论等) ---
-    // 如果你有其他可点赞的实体，可以保留这些。
-    // 对于文章，likeCount 将在文章的哈希中。
-    // 点赞某文章的用户集合将是 article:likers:{articleId}
 
     /**
      * 存储点赞了特定通用目标的用户 ID 集合 (Set) 的 Key。
@@ -55,7 +53,7 @@ public class RedisKeyUtil {
     }
 
     /**
-     * 通用目标的点赞计数的 Key (如果该计数不属于目标主哈希的一部分)。
+     * 通用目标的点赞计数的 Key
      * 对于文章，这个 Key *不会*被使用，因为 likeCount 在 article:{id} 哈希中。
      * 例如: likes:target_count:comment:505 -> 20
      */
@@ -67,12 +65,24 @@ public class RedisKeyUtil {
     }
 
 
-    // --- 板块和用户的 Key (看起来没问题) ---
     public static String getBoardArticlesZSetKey(Long boardId) {
         return PREFIX_BOARD + SPLIT + FIELD_ARTICLES_ZSET + SPLIT + boardId;
     }
 
     public static String getUserResponseKey(Long userId) {
         return PREFIX_USER + SPLIT + userId;
+    }
+
+    public static String getArticleTopRepliesZsetKey(Long articleId) {
+        return PREFIX_ARTICLE + SPLIT + TOP_REPLIES + SPLIT + articleId;
+    }
+
+    public static String getRepliesChildrenZsetKey(Long parentRepliesId) {
+
+        return PREFIX_PARENT_REPLY + SPLIT + CHILDREN_REPLY + SPLIT + parentRepliesId;
+    }
+
+    public static String getArticleReplyKey(Long repliesId) {
+        return PREFIX_PARENT_REPLY + SPLIT + repliesId;
     }
 }

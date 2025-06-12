@@ -11,9 +11,10 @@ import java.util.concurrent.ThreadPoolExecutor;
 @Configuration
 @EnableAsync(proxyTargetClass=true)
 public class AsyncConfig {
-    public static final String DB_PERSISTENCE_EXECUTOR_NAME = "dbPersistenceExecutor";
+    public static final String DB_PERSISTENCE_EXECUTOR = "dbPersistenceExecutor";
+    public static final String REDIS_PERSISTENCE_EXECUTOR = "redisPersistenceExecutor";
 
-    @Bean(DB_PERSISTENCE_EXECUTOR_NAME)
+    @Bean(DB_PERSISTENCE_EXECUTOR)
     public Executor dbPersistenceExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(5);
@@ -24,4 +25,14 @@ public class AsyncConfig {
         return executor;
     }
 
+    @Bean(REDIS_PERSISTENCE_EXECUTOR)
+    public Executor redisPersistenceExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(5);
+        executor.setMaxPoolSize(10);
+        executor.setQueueCapacity(500);
+        executor.setThreadNamePrefix("RedisPersist-");
+        executor.initialize();
+        return executor;
+    }
 }

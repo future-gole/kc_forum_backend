@@ -20,7 +20,7 @@ public enum ResultCode {
     FAIL_REFRESH_TOKEN(1009,"无效的刷新请求 (缺少凭证)",HttpStatus.UNAUTHORIZED),
 
     FAILED_USER_EXISTS (1101, "用户已存在",HttpStatus.CONFLICT), // HTTP 409 尝试创建一个已经存在的资源
-    FAILED_USER_NOT_EXISTS (1102, "用户不存在",HttpStatus.BAD_REQUEST),
+    FAILED_USER_NOT_EXISTS (1102, "用户不存在",HttpStatus.NOT_FOUND),
     FAILED_LOGIN (1103, "用户名或密码错误",HttpStatus.BAD_REQUEST),
     FAILED_USER_BANNED (1104, "您已被禁⾔, 请联系管理员.",HttpStatus.UNAUTHORIZED),
     FAILED_TWO_PWD_NOT_SAME (1105, "两次输入的密码不⼀致",HttpStatus.BAD_REQUEST),
@@ -34,12 +34,15 @@ public enum ResultCode {
     ERROR_IS_NULL (2002, "空指针异常", HttpStatus.INTERNAL_SERVER_ERROR),
     ERROR_REDIS_CHANGE(2003,"redis类型转化异常", HttpStatus.INTERNAL_SERVER_ERROR),
     FAILED_OPERATION_REDIS_SCRIPT(2004,"redis脚本执行异常", HttpStatus.INTERNAL_SERVER_ERROR),
+    FAILED_OPERATION_REDIS(2005,"redis执行异常", HttpStatus.INTERNAL_SERVER_ERROR),
 
-    FAILED_ARTICLE_NOT_EXISTS(3001,"帖子不存在", HttpStatus.BAD_REQUEST),
+    FAILED_ARTICLE_NOT_EXISTS(3001,"帖子不存在", HttpStatus.NOT_FOUND),
     FAILED_UPDATE_ARTICLE(3002,"帖子更新失败",HttpStatus.BAD_REQUEST),
     FAILED_ARTICLE_BANNED(3003,"帖子被禁言",HttpStatus.FORBIDDEN),
     FAILED_ARTICLE_DELETE(3004,"帖子删除失败",HttpStatus.INTERNAL_SERVER_ERROR),
     FAILED_REPLY_DELETE(3005,"回复帖子删除失败",HttpStatus.INTERNAL_SERVER_ERROR),
+    FAILED_REPLY_RANGE(3006,"查询回复帖范围有误",HttpStatus.NOT_FOUND),
+    FAILED_REPLY_CREATE(3007,"新增回复贴失败",HttpStatus.INTERNAL_SERVER_ERROR),
 
     FAILED_CHANGE_LIKE(4001,"增加/删除点赞失败",HttpStatus.INTERNAL_SERVER_ERROR),
 

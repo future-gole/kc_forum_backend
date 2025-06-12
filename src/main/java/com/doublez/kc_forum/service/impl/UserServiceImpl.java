@@ -8,12 +8,16 @@ import com.doublez.kc_forum.common.exception.BusinessException;
 import com.doublez.kc_forum.common.exception.SystemException;
 import com.doublez.kc_forum.common.pojo.request.RegisterRequest;
 import com.doublez.kc_forum.common.pojo.request.UserLoginRequest;
+import com.doublez.kc_forum.common.pojo.response.UserArticleResponse;
 import com.doublez.kc_forum.common.pojo.response.UserLoginResponse;
 import com.doublez.kc_forum.common.utiles.JwtUtil;
+import com.doublez.kc_forum.common.utiles.RedisKeyUtil;
 import com.doublez.kc_forum.common.utiles.SecurityUtil;
 import com.doublez.kc_forum.mapper.UserMapper;
 import com.doublez.kc_forum.model.User;
 import com.doublez.kc_forum.service.IUserService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -21,17 +25,25 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static com.doublez.kc_forum.common.utiles.AssertUtil.copyProperties;
 
 @Service
 @Slf4j
@@ -53,6 +65,15 @@ public class UserServiceImpl implements IUserService {
     private RefreshTokenService refreshTokenService;
     @Value("${jwt.refresh-token.expiration-ms}")
     private long refreshTokenExpirationMillis;
+
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private RedisAsyncPopulationService redisAsync;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -100,14 +121,17 @@ public class UserServiceImpl implements IUserService {
                     Files.deleteIfExists(oldAvatarPath); // 尝试删除，如果不存在也不会报错
                 } catch (IOException e) {
                     // 旧头像删除失败，记录日志，但不影响新头像上传
-                    log.error("删除旧头像失败: {}", oldAvatarPath, e);
-                    // 这里可以考虑抛出自定义异常，或者通过其他方式通知管理员
-                    // 但不应该回滚事务，因为新头像已经上传成功了
+                    log.error("删除旧头像失败: {},userId:{}", oldAvatarPath,userId,e);
                 }
             }
-
-            // 10. 返回完整的头像URL
-            return avatarBaseUrl + avatarUrl;
+            //直接删除对应的redis缓存，下次查询到了在进行缓存
+            Boolean delete = stringRedisTemplate.delete(RedisKeyUtil.getUserResponseKey(userId));
+            //出错了也不抛出异常
+            if(!delete){
+                log.warn("头像对应缓存删除失败,key不存在或者删除失败：userId:{}",userId);
+            }
+            // 10. 返回相对的头像URL即可!!! nginx自动会补充
+            return avatarUrl;
 
         } catch (IOException e) {
             log.error("用户 {} 上传头像失败", userId, e);
@@ -205,8 +229,8 @@ public class UserServiceImpl implements IUserService {
         // --- !! 设置 Refresh Token 到 HttpOnly Cookie !! ---
         Cookie refreshTokenCookie = new Cookie("refreshToken", refreshTokenString); // Cookie 名称为 "refreshToken"
         refreshTokenCookie.setHttpOnly(true); // !! 关键：设置为 HttpOnly !!
-//        refreshTokenCookie.setSecure(true); // !! 关键：仅在 HTTPS 下传输 (生产环境必须 true) !!
-//        refreshTokenCookie.setPath("/api/token"); // !! 关键：设置 Cookie 的路径，通常是刷新接口的路径或更上层路径 !!
+        refreshTokenCookie.setSecure(true); // !! 关键：仅在 HTTPS 下传输 (生产环境必须 true) !!
+        refreshTokenCookie.setPath("/api/token"); // !! 关键：设置 Cookie 的路径，通常是刷新接口的路径或更上层路径 !!
         refreshTokenCookie.setMaxAge((int) (refreshTokenExpirationMillis / 1000)); // 设置 Cookie 过期时间 (秒)
         // refreshTokenCookie.setDomain("yourdomain.com"); // (可选) 生产环境设置域名
         // SameSite 策略: Strict 最严格，Lax 常用平衡点。防止 CSRF。
@@ -228,7 +252,6 @@ public class UserServiceImpl implements IUserService {
         //添加refreshToken到redis
         refreshTokenService.createRefreshToken(refreshTokenString);
         return loginResponse;
-
     }
 
     @Override
@@ -347,4 +370,62 @@ public class UserServiceImpl implements IUserService {
         return Result.success();
     }
 
+    /**
+     * 获取并缓存用户信息。
+     */
+    public Map<Long, UserArticleResponse> fetchAndCacheUsers(List<Long> userIds) {
+        if (CollectionUtils.isEmpty(userIds)) {
+            return Collections.emptyMap();
+        }
+        Map<Long, UserArticleResponse> userMap = new HashMap<>();
+        List<String> userKeys = userIds.stream().map(RedisKeyUtil::getUserResponseKey).toList();
+
+        // 使用Pipeline的MGET获取用户JSON字符串
+        List<Object> userJsonListObjects = stringRedisTemplate.executePipelined(
+                (RedisCallback<Object>) connection -> {
+                    for (String userKey : userKeys) {
+                        connection.stringCommands().get(userKey.getBytes(StandardCharsets.UTF_8));
+                    }
+                    return null;
+                });
+
+
+        List<Long> missedUserIds = new ArrayList<>();
+        for (int i = 0; i < userIds.size(); i++) {
+            Long currentUserId = userIds.get(i);
+            // Pipeline返回的是List<Object>，需要处理null和类型转换
+            String userJson = null;
+            if (userJsonListObjects != null && i < userJsonListObjects.size() && userJsonListObjects.get(i) != null) {
+                Object element = userJsonListObjects.get(i);
+                if (element instanceof String) { // 主要检查 String 类型
+                    userJson = (String) element;
+                } else {
+                    log.error("不是期望的用户数据类型:{} ", element.getClass().getName());
+                }
+            }
+            if (StringUtils.hasText(userJson) && !"null".equalsIgnoreCase(userJson)) { // 检查 "null" 字符串
+                try {
+                    UserArticleResponse user = objectMapper.readValue(userJson, UserArticleResponse.class);
+                    userMap.put(currentUserId, user);
+                } catch (JsonProcessingException e) {
+                    log.error("解析用户ID {} 的JSON失败: {}", currentUserId, e.getMessage());
+                    missedUserIds.add(currentUserId);
+                }
+            } else {
+                missedUserIds.add(currentUserId);
+            }
+        }
+
+        if (!missedUserIds.isEmpty()) {
+            log.info("用户缓存未命中，ID列表: {}", missedUserIds);
+
+            Map<Long,User> dbUsers = selectUserInfoByIds(missedUserIds);
+            for (User dbUser : dbUsers.values()) {
+                UserArticleResponse uar = copyProperties(dbUser, UserArticleResponse.class);
+                userMap.put(dbUser.getId(), uar);
+                redisAsync.cacheUser(uar);
+            }
+        }
+        return userMap;
+    }
 }

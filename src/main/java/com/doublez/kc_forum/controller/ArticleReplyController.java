@@ -2,9 +2,9 @@ package com.doublez.kc_forum.controller;
 
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
-import com.doublez.kc_forum.common.exception.ApplicationException;
 import com.doublez.kc_forum.common.exception.BusinessException;
 import com.doublez.kc_forum.common.pojo.request.ArticleReplyAddRequest;
+import com.doublez.kc_forum.common.pojo.response.ArticleReplyMetaCacheDTO;
 import com.doublez.kc_forum.common.pojo.response.ViewArticleReplyResponse;
 import com.doublez.kc_forum.common.utiles.AuthUtils;
 import com.doublez.kc_forum.common.utiles.JwtUtil;
@@ -55,11 +55,13 @@ public class ArticleReplyController {
     }
     @GetMapping("/getArticleReplies")
     @Operation(summary = "获取回复帖子",
-            description = "通过articleId来获取当前列表下所有帖子")
-    public List<ViewArticleReplyResponse> getArticleReply(@Parameter(name = "帖子Id") Long articleId) {
+            description = "通过articleId来分页获取当前列表下帖子")
+    public ViewArticleReplyResponse getArticleReply(
+            @NotNull @Parameter(name = "帖子Id") Long articleId,
+            @NotNull Integer currentPage,@NotNull Integer pageSize) {
         //有效性校验
         if(articleId != null && articleId > 0) {
-            return articleReplyServiceImpl.getArticleReply(articleId);
+            return articleReplyServiceImpl.getArticleReply(articleId,currentPage,pageSize);
         }
         log.warn("传入参数有错，articleId:{}", articleId);
         throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
@@ -77,5 +79,17 @@ public class ArticleReplyController {
                 throw new BusinessException(ResultCode.FAILED_REPLY_DELETE);
             }
         }else throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
+    }
+    @GetMapping("/getChildrenReplies")
+    @Operation(summary = "获取子回复帖子",
+            description = "通过replyId来分页获取当前回复下子回复")
+    public List<ArticleReplyMetaCacheDTO> getChildrenReplyByReplyId(
+            @NotNull @Parameter(name = "父回复贴Id") Long replyId,
+            @NotNull Integer currentPage,@NotNull Integer pageSize){
+        if(replyId <= 0){
+            log.warn("传入参数有错，replyId:{}", replyId);
+            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
+        }
+        return articleReplyServiceImpl.getChildrenReplyByReplyId(replyId,currentPage,pageSize);
     }
 }

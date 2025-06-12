@@ -3,6 +3,7 @@ package com.doublez.kc_forum.service;
 import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.pojo.request.RegisterRequest;
 import com.doublez.kc_forum.common.pojo.request.UserLoginRequest;
+import com.doublez.kc_forum.common.pojo.response.UserArticleResponse;
 import com.doublez.kc_forum.common.pojo.response.UserLoginResponse;
 import com.doublez.kc_forum.model.User;
 import jakarta.servlet.http.HttpServletResponse;
@@ -41,4 +42,6 @@ public interface IUserService {
     void modifyUserInfoPasswordById(String password, Long id);
 
     Result<?> modifyUserInfoEmailById(String email,Long id,String code);
+
+    public Map<Long, UserArticleResponse> fetchAndCacheUsers(List<Long> userIds);
 }

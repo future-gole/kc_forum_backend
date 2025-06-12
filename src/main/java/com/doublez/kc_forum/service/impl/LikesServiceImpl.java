@@ -16,364 +16,287 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
+import org.springframework.data.redis.support.collections.DefaultRedisSet;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class LikesServiceImpl implements ILikesService {
 
-
     private final LikesMapper likesMapper;
-
-    private final RedisScript<List> likeScript;
-
-    private final RedisScript<List> unlikeScript;
-
+    private final RedisScript<List> likeScript; // 假设List中是Long类型
+    private final RedisScript<List> unlikeScript; // 假设List中是Long类型
     private final StringRedisTemplate stringRedisTemplate;
+    private final DBAsyncPopulationService dbAsync;
 
+    // 文章/回复 Hash中likeCount字段的名称 (统一管理)
+    private static final String LIKE_COUNT_FIELD = "likeCount";
+    // 用于在Redis Set中标记一个目标没有点赞记录的占位符（防止缓存穿透）
+    private static final String EMPTY_LIKE_CACHE_STRING = "__EMPTY_LIKES_PLACEHOLDER__"; // 使用更特殊的标记
 
-    private IArticleService articleService;
-
-    private IArticleReplyService articleReplyService;
-
-    public static final String DB_PERSISTENCE_EXECUTOR = "dbPersistenceExecutor";
-    // 文章Hash中likeCount字段的名称
-    private static final String ARTICLE_LIKE_COUNT_FIELD = ArticleServiceImpl.FIELD_LIKE_COUNT; // "likeCount"
+    // 目标类型常量
+    private static final String TARGET_TYPE_ARTICLE = "article";
+    private static final String TARGET_TYPE_REPLY = "reply";
 
     @Autowired
     public LikesServiceImpl(StringRedisTemplate stringRedisTemplate,
-                            @Qualifier("likeScript") RedisScript<List> likeScript,
-                            @Qualifier("unlikeScript") RedisScript<List> unlikeScript,
+                            @Qualifier("likeScript") RedisScript<List> likeScript, // 确保Bean名称正确
+                            @Qualifier("unlikeScript") RedisScript<List> unlikeScript, // 确保Bean名称正确
                             LikesMapper likesMapper,
-                            IArticleService articleService,
-                            IArticleReplyService articleReplyService) {
+                            DBAsyncPopulationService dbAsync) {
         this.stringRedisTemplate = stringRedisTemplate;
         this.likeScript = likeScript;
         this.unlikeScript = unlikeScript;
         this.likesMapper = likesMapper;
-        this.articleService = articleService;
-        this.articleReplyService = articleReplyService;
+        this.dbAsync = dbAsync;
     }
 
-
-    private static final String TARGET_TYPE_ARTICLE = "article";
-    private static final String TARGET_TYPE_REPLY = "reply";
-
-    private Likes isLikes(Long userId, Long targetId, String targetType){
-        return likesMapper.selectOne(new LambdaQueryWrapper<Likes>().eq(Likes::getUserId, userId)
-                .eq(Likes::getTargetId, targetId).eq(Likes::getTargetType, targetType));
-    }
-
+    /**
+     * 用户点赞目标。
+     *
+     * @param userId     用户ID
+     * @param targetId   目标ID (文章ID或回复ID)
+     * @param targetType 目标类型 ("article" 或 "reply")
+     */
     @Override
     public void like(Long userId, Long targetId, String targetType) {
-        if (!(TARGET_TYPE_ARTICLE.equalsIgnoreCase(targetType) || TARGET_TYPE_REPLY.equalsIgnoreCase(targetType)) ) {
-            log.warn("不支持的点赞目标类型: {}", targetType);
-            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE, "不支持的目标类型");
-        }
-
-        // 点赞了此文章的用户集合的Key
-        String articleLikersSetKey = RedisKeyUtil.getArticleLikersSetKey(targetId);
-        // 包含文章详情（包括likeCount）的Hash的Key
-        String articleHashKey = RedisKeyUtil.getArticleKey(targetId);
+        String targetHashKey = getTargetHashKeyAndValidateType(targetId, targetType);
+        String likersSetKey = RedisKeyUtil.getUserLikesTargetSetKey(targetType, targetId);
 
         try {
-            // 执行Lua脚本
             List<Long> results = stringRedisTemplate.execute(
-                    likeScript, // Lua脚本对象
-                    List.of(articleLikersSetKey, articleHashKey), // KEYS 参数列表
-                    userId.toString(), ARTICLE_LIKE_COUNT_FIELD    // ARGV 参数列表
+                    likeScript,
+                    List.of(likersSetKey, targetHashKey), // KEYS
+                    userId.toString(), LIKE_COUNT_FIELD, EMPTY_LIKE_CACHE_STRING // ARGV
             );
-
-            handleScriptResult(results, userId, targetId, targetType, "点赞", true);
-
-        } catch (BusinessException be) { // 捕获业务异常并重新抛出
+            handleScriptResult(results, userId, targetId, targetType, "点赞", true, targetHashKey);
+        } catch (BusinessException be) {
             throw be;
-        } catch (Exception e) { // 捕获其他运行时异常
-            log.error("[Redis] 执行点赞脚本时发生异常, userId: {}, target: {}:{}, 错误: {}",
-                    userId, targetType, targetId, e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("[Redis] 执行点赞脚本时发生异常, likersSetKey:{}, targetHashKey:{}, userId:{}, target:{}:{}, 错误:{}",
+                    likersSetKey, targetHashKey, userId, targetType, targetId, e.getMessage(), e);
             throw new SystemException(ResultCode.FAILED_OPERATION_REDIS_SCRIPT, "Redis点赞操作失败: " + e.getMessage());
         }
     }
 
+    /**
+     * 用户取消点赞目标。
+     *
+     * @param userId     用户ID
+     * @param targetId   目标ID
+     * @param targetType 目标类型
+     */
     @Override
     public void unlike(Long userId, Long targetId, String targetType) {
-        if (!(TARGET_TYPE_ARTICLE.equalsIgnoreCase(targetType) || TARGET_TYPE_REPLY.equalsIgnoreCase(targetType))) {
-            log.warn("不支持的取消点赞目标类型: {}", targetType);
-            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE, "不支持的目标类型");
-        }
-
-        String articleLikersSetKey = RedisKeyUtil.getArticleLikersSetKey(targetId);
-        String articleHashKey = RedisKeyUtil.getArticleKey(targetId);
+        String targetHashKey = getTargetHashKeyAndValidateType(targetId, targetType);
+        String likersSetKey = RedisKeyUtil.getUserLikesTargetSetKey(targetType, targetId);
 
         try {
             List<Long> results = stringRedisTemplate.execute(
                     unlikeScript,
-                    List.of(articleLikersSetKey, articleHashKey), // KEYS
-                    userId.toString(), ARTICLE_LIKE_COUNT_FIELD    // ARGV
+                    List.of(likersSetKey, targetHashKey), // KEYS
+                    userId.toString(), LIKE_COUNT_FIELD, EMPTY_LIKE_CACHE_STRING // ARGV
             );
-
-            handleScriptResult(results, userId, targetId, targetType, "取消点赞", false);
-
+            handleScriptResult(results, userId, targetId, targetType, "取消点赞", false, targetHashKey);
         } catch (BusinessException be) {
             throw be;
         } catch (Exception e) {
-            log.error("[Redis] 执行取消点赞脚本时发生异常, userId: {}, target: {}:{}, 错误: {}",
-                    userId, targetType, targetId, e.getMessage(), e);
+            log.error("[Redis] 执行取消点赞脚本时发生异常, likersSetKey:{}, targetHashKey:{}, userId:{}, target:{}:{}, 错误:{}",
+                    likersSetKey, targetHashKey, userId, targetType, targetId, e.getMessage(), e);
             throw new SystemException(ResultCode.FAILED_OPERATION_REDIS_SCRIPT, "Redis取消点赞操作失败: " + e.getMessage());
         }
     }
 
     /**
-     * 处理Lua脚本返回的结果。
-     * @param results Lua脚本返回的List<Long>，通常包含[操作状态, 当前/新的计数值]
-     * @param userId 用户ID
-     * @param targetId 目标ID
+     * 根据目标类型和ID获取其在Redis中存储详情(包括点赞数)的Hash Key，并校验类型。
+     *
+     * @param targetId   目标ID
      * @param targetType 目标类型
-     * @param operation 操作名称（用于日志）
-     * @param isLikeOperation 是点赞操作(true)还是取消点赞操作(false)
+     * @return Redis Hash Key
+     * @throws BusinessException 如果目标类型不支持
      */
-    private void handleScriptResult(List<Long> results, Long userId, Long targetId, String targetType, String operation, boolean isLikeOperation) {
+    private String getTargetHashKeyAndValidateType(Long targetId, String targetType) {
+        String hashKey;
+        if (TARGET_TYPE_ARTICLE.equalsIgnoreCase(targetType)) {
+            hashKey = RedisKeyUtil.getArticleKey(targetId);
+        } else if (TARGET_TYPE_REPLY.equalsIgnoreCase(targetType)) {
+            hashKey = RedisKeyUtil.getArticleReplyKey(targetId);
+        } else {
+            log.warn("不支持的点赞目标类型: {}", targetType);
+            throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE, "不支持的目标类型");
+        }
+        return hashKey;
+    }
+
+    /**
+     * 处理Lua脚本返回的结果。
+     *
+     * @param results         Lua脚本返回的List，通常包含[操作状态, 当前/新的计数值]
+     * @param userId          用户ID
+     * @param targetId        目标ID
+     * @param targetType      目标类型
+     * @param operation       操作名称（用于日志）
+     * @param isLikeOperation 是点赞操作(true)还是取消点赞操作(false)
+     * @param targetHashKey   目标在Redis中的Hash Key (用于可能的日志或调试)
+     */
+    private void handleScriptResult(List<Long> results, Long userId, Long targetId, String targetType, String operation, boolean isLikeOperation, String targetHashKey) {
         if (results == null || results.size() < 2) {
-            log.error("Redis {} 脚本执行结果不符合预期 (大小或为null), userId: {}, target: {}:{}, 返回结果: {}",
-                    operation, userId, targetType, targetId, results);
+            log.error("Redis {} 脚本执行结果不符合预期 (大小或为null), userId:{}, target:{}:{}, targetHashKey:{}, 返回结果:{}",
+                    operation, userId, targetType, targetId, targetHashKey, results);
             throw new SystemException(ResultCode.FAILED_OPERATION_REDIS_SCRIPT, "Redis脚本执行结果异常");
         }
 
-        // Lua脚本返回: results.get(0) 是操作状态 (1表示成功执行了状态变更, 0表示未发生状态变更)
-        // results.get(1) 是变更后的新计数值或未变更时的当前计数值
-        long operationStatus = results.get(0);
-        long newOrCurrentCount = results.get(1);
+        long operationStatus = results.get(0); // Lua脚本返回的实际操作状态 (1=成功改变, 0=未改变或已是目标状态)
 
-        if (operationStatus == 0) { // 状态未发生变化
-            String message = isLikeOperation ? "用户 {} 已经对目标点赞，重复点赞失败 {}:{}" : "用户 {} 未对目标点赞，取消点赞操作失败 {}:{}";
-            log.warn(message + ". 当前数量: {}", userId, targetType, targetId, newOrCurrentCount);
-            // 根据你的业务逻辑，这里可以抛出自定义的“重复操作”或“无效操作”异常
-            throw new BusinessException(ResultCode.FAILED_CHANGE_LIKE, (isLikeOperation ? "您已点赞过该内容" : "您未点赞过该内容，无法取消"));
+        if (operationStatus == 0) { // 状态未发生变化 (例如：重复点赞，或取消一个未点赞的内容)
+            // 用户操作无效，直接抛出业务异常。
+            // newOrCurrentCountFromRedis 是 Redis 中当前的点赞数。
+            String messageTemplate = isLikeOperation ? "您已点赞过该内容" : "您未点赞过该内容，无法取消";
+            log.warn("用户 {} 对目标 {}:{} 进行 {} 操作失败 (状态未改变). 原因: {}",
+                    userId, targetType, targetId, operation, messageTemplate);
+            throw new BusinessException(ResultCode.FAILED_CHANGE_LIKE, messageTemplate);
         }
 
-        // 操作成功，状态发生变更
-        log.info("用户 {} 成功对目标进行 {} 操作 {}:{}. 当前数量: {}", userId, operation, targetType, targetId, newOrCurrentCount);
+        // 操作成功 (operationStatus == 1)，状态发生变更
+        log.info("用户 {} 成功对目标进行 {} 操作 {}:{}",
+                userId, operation, targetType, targetId);
 
-        // 异步执行数据库持久化操作 (你现有的逻辑应该可以)
-        // 你可能需要调整 persistLikeStateAsync 方法，如果它依赖于旧的计数键结构的话
-        persistLikeStateAsync(userId, targetId, targetType, isLikeOperation);
+        // 异步执行数据库持久化操作
+        dbAsync.persistLikeStateAsync(userId, targetId, targetType, isLikeOperation);
+        // 将数据库中的总点赞数更新为 Redis 中最新的计数值
+        if(isLikeOperation){
+            dbAsync.updateLikeCountInDb(targetId, targetType, 1);
+        }else {
+            dbAsync.updateLikeCountInDb(targetId, targetType, -1);
+        }
     }
-//    @Override
-//    public void like(Long userId, Long targetId, String targetType) {
-//        // todo: 检查 targetId 和 targetType 的有效性 (例如文章或回复是否存在)
-//        // if (!isTargetValid(targetId, targetType)) {
-//        //     throw new BusinessException(ResultCode.TARGET_NOT_FOUND);
-//        // }
-//        String userLikesSetKey = RedisKeyUtil.getUserLikesTargetSetKey(targetType, targetId);
-//        String targetLikeCountKey = RedisKeyUtil.getTargetLikeCountKey(targetType, targetId);
-//        //1。 更新redis
-//        try {
-//            @SuppressWarnings("unchecked") // Script returns List<Long>
-//            List<Long> results = (List<Long>) stringRedisTemplate.execute(
-//                    likeScript,
-//                    //构造keys的list，用于传入lua脚本
-//                    List.of(userLikesSetKey, targetLikeCountKey),
-//                    userId.toString()
-//            );
-//
-//            if (results.size() < 2) {
-//                log.error("redis 点赞脚本执行异常，userId: {}, target: {}:{}, Results: {}",
-//                        userId, targetType, targetId, results);
-//                throw new SystemException(ResultCode.FAILED_OPERATION_REDIS_SCRIPT, "redis脚本执行异常");
-//            }
-//
-//            long operationStatus = results.get(0); // 1 for new like, 0 for already liked
-//            long newOrCurrentCount = results.get(1);
-//
-//            if (operationStatus == 0) {
-//                log.warn("用户 {} 已经对目标进行点赞，点赞失败 {}:{}. 当前数量: {}", userId, targetType, targetId, newOrCurrentCount);
-//                throw new BusinessException(ResultCode.FAILED_CHANGE_LIKE);
-//            }
-//
-//            log.info("用户 {} 成功对目标进行点赞 {}:{}. 当前数量: {}", userId, targetType, targetId, newOrCurrentCount);
-//            LikesServiceImpl self = (LikesServiceImpl)AopContext.currentProxy();
-//            self.persistLikeStateAsync(userId, targetId, targetType, true);
-//
-//        } catch (BusinessException be) {
-//            throw be;//重新抛出
-//        } catch (Exception e) {
-//            log.error("[redis] 执行点赞操作异常 userId: {}, target: {}:{}. Error: {}",
-//                    userId, targetType, targetId, e.getMessage(), e);
-//            // Consider if a rollback or compensation is needed in Redis if script partially failed (though Lua is atomic)
-//            throw new SystemException(ResultCode.FAILED_OPERATION_REDIS_SCRIPT, e.getMessage());
-//        }
-//    }
-//
-//    @Override
-//    public void unlike(Long userId, Long targetId, String targetType) {
-//        // todo: 检查 targetId 和 targetType 的有效性 (例如文章或回复是否存在)
-//        // if (!isTargetValid(targetId, targetType)) {
-//        //     throw new BusinessException(ResultCode.TARGET_NOT_FOUND);
-//        // }
-//        String userLikesSetKey = RedisKeyUtil.getUserLikesTargetSetKey(targetType, targetId);
-//        String targetLikeCountKey = RedisKeyUtil.getTargetLikeCountKey(targetType, targetId);
-//        //1. 更新redis
-//        try{
-//            @SuppressWarnings("unchecked")
-//            List<Long> results = (List<Long>)stringRedisTemplate.execute(
-//                    unlikeScript,
-//                    List.of(userLikesSetKey, targetLikeCountKey),
-//                    userId.toString()
-//            );
-//            if(results.size() < 2) {
-//                log.error("redis 点赞脚本执行异常，userId: {}, target: {}:{}, Results: {}",
-//                        userId, targetType, targetId, results);
-//                throw new SystemException(ResultCode.FAILED_OPERATION_REDIS_SCRIPT, "redis脚本执行异常");
-//            }
-//            long operationStatus = results.get(0);
-//            long newOrCurrentCount = results.get(1);
-//            //1.1 执行失败
-//            if (operationStatus == 0) {
-//                log.warn("用户 {} 未对目标进行点赞，取消失败 {}:{}. 当前数量: {}", userId, targetType, targetId, newOrCurrentCount);
-//                throw new BusinessException(ResultCode.FAILED_CHANGE_LIKE);
-//            }
-//            //1.2 执行成功
-//            log.info("用户 {} 成功对目标取消点赞 {}:{}. 当前数量: {}", userId, targetType, targetId, newOrCurrentCount);
-//            //2. 异步执行数据库操作
-//            LikesServiceImpl self = (LikesServiceImpl)AopContext.currentProxy();
-//            self.persistLikeStateAsync(userId, targetId, targetType, false);
-//        } catch (BusinessException be) {
-//            throw be;//重新抛出
-//        } catch (Exception e) {
-//            log.error("[redis] 执行点赞操作异常 userId: {}, target: {}:{}. Error: {}",
-//                    userId, targetType, targetId, e.getMessage(), e);
-//            // Consider if a rollback or compensation is needed in Redis if script partially failed (though Lua is atomic)
-//            throw new SystemException(ResultCode.FAILED_OPERATION_REDIS_SCRIPT, "Like operation failed.");
-//        }
-//    }
-
 
     /**
-     * 异步持久化点赞状态到数据库。
-     * (你现有的逻辑应该可以，如果需要可以调整)
+     * 检查用户对目标的点赞状态。
+     *
+     * @param userId     用户ID
+     * @param targetId   目标ID
+     * @param targetType 目标类型
+     * @return true 如果用户已点赞，false 则未点赞
      */
-    @Async(DB_PERSISTENCE_EXECUTOR) // 确保你配置了名为 "dbPersistenceExecutor" 的线程池执行器
-    public void persistLikeStateAsync(Long userId, Long targetId, String targetType, boolean isLiked) {
-        try {
-            if (isLiked) { // 点赞操作
-                // 检查数据库中是否已存在该点赞记录，避免重复插入（尽管Redis层面已处理，DB层面也做个保险）
-                Likes existingLike = likesMapper.selectOne(new LambdaQueryWrapper<Likes>()
-                        .eq(Likes::getUserId, userId)
-                        .eq(Likes::getTargetId, targetId)
-                        .eq(Likes::getTargetType, targetType));
-                if (existingLike == null) {
-                    Likes like = new Likes();
-                    like.setUserId(userId);
-                    like.setTargetId(targetId);
-                    like.setTargetType(targetType);
-                    like.setCreateTime(LocalDateTime.now()); // 记录点赞时间
-                    likesMapper.insert(like);
-                    log.info("[DB异步] 持久化点赞记录成功, userId: {}, target: {}:{}", userId, targetType, targetId);
-                } else {
-                    log.info("[DB异步] 点赞记录已存在于数据库, userId: {}, target: {}:{}", userId, targetType, targetId);
-                }
-            } else { // 取消点赞操作
-                int deletedRows = likesMapper.delete(new LambdaQueryWrapper<Likes>()
-                        .eq(Likes::getUserId, userId)
-                        .eq(Likes::getTargetId, targetId)
-                        .eq(Likes::getTargetType, targetType));
-                if (deletedRows > 0) {
-                    log.info("[DB异步] 从数据库删除点赞记录成功, userId: {}, target: {}:{}", userId, targetType, targetId);
-                } else {
-                    log.warn("[DB异步] 尝试从数据库删除点赞记录，但未找到匹配项, userId: {}, target: {}:{}", userId, targetType, targetId);
-                }
-            }
-        } catch (Exception e) {
-            log.error("[DB异步] 持久化点赞状态失败, userId: {}, target: {}:{}, isLiked: {}. 错误: {}",
-                    userId, targetType, targetId, isLiked, e.getMessage(), e);
-            // 考虑为失败的数据库操作实现重试机制或死信队列
-        }
-    }
-
-//    /**
-//     * 异步执行数据库操作
-//     */
-//    @Async(DB_PERSISTENCE_EXECUTOR) // Make sure Spring's AOP proxy can intercept this call for async execution
-//    @Transactional // For database operation
-//    public void persistLikeStateAsync(Long userId, Long targetId, String targetType, boolean isLiked) {
-//        try {
-//            //1. 再次检查数据库的记录
-//            Likes existingLike = isLikes(userId, targetId, targetType); ;
-//            if (isLiked) {
-//                //2. 插入数据库
-//                if (existingLike == null) {
-//                    Likes like = new Likes();
-//                    like.setUserId(userId);
-//                    like.setTargetId(targetId);
-//                    like.setTargetType(targetType);
-//                    like.setCreateTime(LocalDateTime.now());
-//                    likesMapper.insert(like);
-//                    log.debug("DB: 插入点赞成功: {}, target: {}:{}", userId, targetType, targetId);
-//                    // 3. 更新 article 或 reply 的 like_count
-//                    if(updateLikeCountInDb(targetId, targetType, 1) != 1){
-//                        throw new SystemException(ResultCode.FAILED_CHANGE_LIKE);
-//                    }
-//                } else {
-//                    // Optionally update timestamp or status if already exists but was (e.g.) soft-deleted
-//                    log.debug("DB: 点赞记录已经存在 userId: {}, target: {}:{}", userId, targetType, targetId);
-//                }
-//            } else {
-//                if(existingLike != null){
-//                    int deletedRows = likesMapper.deleteById(existingLike.getId());
-//                    if (deletedRows > 0) {
-//                        log.debug("DB: 点赞记录删除成功 userId: {}, target: {}:{}", userId, targetType, targetId);
-//                    } else {
-//                        log.error("DB: 点赞记录删除失败 userId: {}, target: {}:{}", userId, targetType, targetId);
-//                        throw new SystemException(ResultCode.FAILED_CHANGE_LIKE);
-//                    }
-//                }
-//                // 3. 更新 article 或 reply 的 like_count
-//                if(updateLikeCountInDb(targetId, targetType, -1) != 1){
-//                    throw new SystemException(ResultCode.FAILED_CHANGE_LIKE);
-//                }
-//            }
-//        } catch (Exception e) {
-//            // Critical: Log and monitor these failures. Consider a retry mechanism or dead-letter queue.
-//            log.error("DB: 数据库 点赞/取消赞 执行出错 userId: {}, target: {}:{}, isLiked: {}. Error: {}",
-//                    userId, targetType, targetId, isLiked, e.getMessage(), e);
-//            // Do NOT throw an exception that would roll back the Redis operation if the primary goal is Redis speed.
-//            // If DB persistence is critical and synchronous, then this async approach isn't suitable.
-//        }
-//    }
-
-
-
     @Override
     public boolean checkLikeStatus(Long userId, Long targetId, String targetType) {
-        // 1. 查询redis，确认是否已点赞
-        String userLikesSetKey = RedisKeyUtil.getUserLikesTargetSetKey(targetType, targetId);
-        Boolean isMember = stringRedisTemplate.opsForSet().isMember(userLikesSetKey, userId.toString());
-        if (isMember != null) { // isMember can be null if Redis connection issue, though unlikely here
-            return isMember;
+        String likersSetKey = RedisKeyUtil.getUserLikesTargetSetKey(targetType, targetId);
+
+        // 1. 直接查询用户是否是Set的成员
+        Boolean isUserMember = stringRedisTemplate.opsForSet().isMember(likersSetKey, userId.toString());
+
+        if (isUserMember == null) {
+            log.error("Redis SISMEMBER 查询异常, key:{}", likersSetKey);
+            // 正常来说没查到返回false，保险起见记录一下
+            throw new SystemException(ResultCode.FAILED_OPERATION_REDIS, "查询点赞状态时Redis操作失败");
         }
-        // 2. redis查询失败，查询数据库
-        Likes existingLike = getLikeFromDb(userId, targetId, targetType);
-        return existingLike != null;
+
+        if (isUserMember) {
+            // 用户ID在集合中，说明已点赞。
+            return true;
+        }
+
+        // 用户ID不在集合中 (isUserMember == false)。
+        // 此时需要判断：是目标确实无此用户点赞，还是缓存未命中/key不存在。
+        // 通过检查Set的大小来辅助判断。如果key不存在，size()通常返回0。
+        Long setSize = stringRedisTemplate.opsForSet().size(likersSetKey);
+
+        if (setSize == null) { // 理论上 size() 对于存在的 StringRedisTemplate 不会返回 null
+            log.warn("Redis SCARD (size) 查询返回 null, key:{}. 视为缓存未命中.", likersSetKey);
+            // 视为缓存未命中，从数据库加载
+            return getLikeFromDbAndCache(likersSetKey, userId, targetId, targetType);
+        }
+
+        if (setSize == 0) {
+            // Set大小为0，意味着Redis中没有此目标的任何点赞者记录（也没有空缓存标记）。
+            // 这通常表示缓存首次加载、缓存失效或Redis数据丢失。
+            log.info("Redis Set (key:{}) 大小为0, 视为缓存未命中或失效, 从数据库加载并缓存.", likersSetKey);
+            return getLikeFromDbAndCache(likersSetKey, userId, targetId, targetType);
+        }
+
+        // isUserMember is false, 且 setSize > 0.
+        // 这意味着Set中存在成员，但不是当前查询的userId。
+        // 这些成员可能是其他真实点赞者，或者仅仅是 EMPTY_LIKE_CACHE_STRING。
+        // 无论哪种情况，当前用户都是未点赞状态。
+        return false;
     }
 
-    private Likes getLikeFromDb(Long userId, Long targetId, String targetType){ // Renamed for clarity
-        return likesMapper.selectOne(new LambdaQueryWrapper<Likes>().eq(Likes::getUserId, userId)
-                .eq(Likes::getTargetId, targetId).eq(Likes::getTargetType, targetType));
-    }
+    /**
+     * 从数据库加载指定目标的所有点赞用户ID，并将其缓存到Redis Set中。
+     * 如果数据库没有点赞记录，则缓存一个空标记。
+     * 同时，会用数据库的实际点赞数校正Redis Hash中的点赞总数字段。
+     *
+     * @param likersSetKey Redis中存储点赞用户集合的Key
+     * @param targetId     目标ID
+     * @param targetType   目标类型
+     * @return 从数据库中查询到的用户ID列表 (字符串形式)
+     */
+    private String[] loadAndCacheLikesFromDbInternal(String likersSetKey, Long targetId, String targetType) {
+        log.info("缓存重建: 开始从数据库加载点赞数据, key:{}, targetId:{}, targetType:{}",
+                likersSetKey, targetId, targetType);
 
-    private int updateLikeCountInDb(Long targetId, String targetType, int increment) {
-        if (TARGET_TYPE_ARTICLE.equals(targetType)) {
-            return  articleService.updateLikeCount(targetId, increment);
-        } else if (TARGET_TYPE_REPLY.equals(targetType)) {
-            return articleReplyService.updateLikeCount(targetId, increment);
+        List<Likes> likesFromDb = likesMapper.selectList(new LambdaQueryWrapper<Likes>()
+                .eq(Likes::getTargetId, targetId)
+                .eq(Likes::getTargetType, targetType));
+
+        String[] userIdsFromDb = likesFromDb.stream()
+                .map(like -> like.getUserId().toString())
+                .toArray(String[]::new);
+
+        // 在更新缓存前，先清除旧的Set内容，确保状态干净
+        stringRedisTemplate.delete(likersSetKey);
+
+        String targetHashKey = getTargetHashKeyAndValidateType(targetId, targetType);
+
+        if (userIdsFromDb.length > 0) {
+            stringRedisTemplate.opsForSet().add(likersSetKey, userIdsFromDb);
+            // 校正Redis Hash中的点赞总数
+            stringRedisTemplate.opsForHash().put(targetHashKey, LIKE_COUNT_FIELD, String.valueOf(userIdsFromDb.length));
+            log.info("缓存重建: 成功从数据库加载并缓存点赞数据, key:{}, 缓存用户数:{}, Hash计数已校正为:{}",
+                    likersSetKey, userIdsFromDb.length, userIdsFromDb.length);
         } else {
-            log.error("取消/新增点赞失败，targetId: {}, targetType: {}",targetId, targetType);
-            throw new SystemException(ResultCode.FAILED_CHANGE_LIKE);
+            // 数据库中没有点赞记录，缓存空标记以防穿透
+            stringRedisTemplate.opsForSet().add(likersSetKey, EMPTY_LIKE_CACHE_STRING);
+            // 同时确保Redis Hash中的点赞总数为0
+            stringRedisTemplate.opsForHash().put(targetHashKey, LIKE_COUNT_FIELD, "0");
+            log.info("缓存重建: 数据库中未查询到点赞数据, key:{}, 进行空值缓存(添加 '{}'), Hash计数已校正为0",
+                    likersSetKey, EMPTY_LIKE_CACHE_STRING);
         }
+
+        // 为新建的缓存（无论是真实数据还是空标记）设置一个合理的过期时间
+         stringRedisTemplate.expire(likersSetKey, 1, TimeUnit.DAYS);
+
+        return userIdsFromDb;
+    }
+
+    /**
+     * 当缓存未命中或失效时，从数据库获取指定用户的点赞状态，并确保相关点赞数据已缓存。
+     *
+     * @param likersSetKey Redis中存储点赞用户集合的Key
+     * @param userId       用户ID
+     * @param targetId     目标ID
+     * @param targetType   目标类型
+     * @return 用户是否点赞
+     */
+    private boolean getLikeFromDbAndCache(String likersSetKey, Long userId, Long targetId, String targetType) {
+        // 调用内部方法从数据库加载并缓存数据
+        String[] cachedUserIds = loadAndCacheLikesFromDbInternal(likersSetKey, targetId, targetType);
+
+        // 检查当前用户是否在从数据库加载的列表中
+        for (String cachedUserId : cachedUserIds) {
+            if (cachedUserId.equals(userId.toString())) {
+                return true; // 用户在从数据库加载的数据中，已点赞
+            }
+        }
+        return false; // 用户不在从数据库加载的数据中，未点赞
     }
 }

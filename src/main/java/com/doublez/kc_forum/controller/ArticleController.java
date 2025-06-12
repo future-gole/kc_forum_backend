@@ -167,15 +167,17 @@ public class ArticleController {
 
     @PostMapping("/deleteArticle")
     @Operation(summary = "根据帖子id，删除对应帖子")
-    public boolean deleteArticle(HttpServletRequest request, @Parameter(description = "帖子ID")@NotNull Long articleId) {
-        if(articleId == null || articleId <= 0){
+    public boolean deleteArticle(HttpServletRequest request,
+                                 @Parameter(description = "帖子ID")@NotNull Long articleId,
+                                 @Parameter(description = "板块ID")@NotNull Long boardId) {
+        if(articleId == null || articleId <= 0 || boardId == null || boardId < 0){
             throw new BusinessException(ResultCode.FAILED_PARAMS_VALIDATE);
         }
         Long userId = JwtUtil.getUserId(request);
         //鉴权
         AuthUtils.userPermissionChecker(userId,articleId,articleService::getUserId);
 
-        return articleService.deleteArticle(articleId);
+        return articleService.deleteArticle(articleId,boardId);
     }
 
 }

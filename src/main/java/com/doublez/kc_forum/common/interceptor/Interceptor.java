@@ -41,10 +41,10 @@ public class Interceptor implements HandlerInterceptor {
         if ("OPTIONS".equals(request.getMethod())) {
             return true;
         }
-        log.info("认证头是：{}",request.getHeader("Authorization"));
+//        log.info("认证头是：{}",request.getHeader("Authorization"));
         String authorizationHeader = request.getHeader("Authorization");
         if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
-            log.warn("认证失败: Authorization header 缺失或格式错误. URI: {}", request.getRequestURI());
+            log.debug("认证失败: Authorization header 缺失或格式错误. URI: {}", request.getRequestURI());
             setUnauthorizedResponse(response, "请提供有效的认证令牌");
             return false;
         }

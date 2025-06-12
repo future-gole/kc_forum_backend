@@ -60,7 +60,6 @@ public interface IArticleService {
      */
     boolean updateArticle(UpdateArticleRequest updateArticleRequest);
 
-    boolean deleteArticle(Long id);
+    boolean deleteArticle(Long articleId,Long boardId);
 
-    int updateLikeCount(Long targetId, int increment);
 }

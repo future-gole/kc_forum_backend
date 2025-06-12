@@ -7,11 +7,14 @@ import com.doublez.kc_forum.common.exception.BusinessException;
 import com.doublez.kc_forum.common.exception.SystemException;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.mybatis.spring.MyBatisSystemException;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -51,17 +54,32 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(e.getErrResult(), resultCode.getHttpStatus());
     }
 
+    @ExceptionHandler(MyBatisSystemException.class)
+    public ResponseEntity<Result<?>> mybatisSystemExceptionHandler(MyBatisSystemException e) {
+        log.error("mybatisSystemException caught: e:{}",e.getMessage(),e); // Log full stack for system errors
 
-    // Handler for ApplicationException if it can be thrown directly
-    // or if other custom exceptions inherit from it but not Business/System
+        return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler(RedisSystemException.class)
+    public ResponseEntity<Result<?>> redisSystemException(RedisSystemException e){
+        log.error("redisSystemException caught: e:{}",e.getMessage(),e);
+        return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+    /**
+     * http请求错误异常
+     * @param e
+     * @return
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Result<?>> httpRequestMethodNotSupportedExceptionHandler(HttpRequestMethodNotSupportedException e) {
+        log.warn("httpRequestMethodNotSupportedException caught: e:{}",e.getMessage());
+        return new ResponseEntity<>(HttpStatus.METHOD_NOT_ALLOWED);
+    }
     @ExceptionHandler(ApplicationException.class)
     public ResponseEntity<Result<?>> applicationExceptionHandler(ApplicationException e) {
         ResultCode resultCode = e.getResultCode();
-        // This case might occur if ApplicationException is thrown directly
-        // without being a BusinessException or SystemException
         if (resultCode == null) {
-            // This should ideally not happen if ApplicationException is always constructed with a ResultCode.
-            // But as a fallback:
             log.error("ApplicationException caught without a specific ResultCode. Defaulting to ERROR_SERVICES. Message: {}", e.getMessage(), e);
             resultCode = ResultCode.ERROR_SERVICES;
             return new ResponseEntity<>(Result.failed(resultCode, e.getMessage()), resultCode.getHttpStatus());
@@ -88,7 +106,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public Result<?> globalExceptionHandler(Exception e) {
         // 对于未被特定处理器捕获的任何其他异常
-        log.error("Unhandled Exception caught: {}", e.getMessage(), e);
+        log.error("未被捕获的异常: {}", e.getMessage(), e);
         // 不应将 e.getMessage() 直接暴露给用户，因为它可能包含敏感信息或技术细节
         // return Result.failed(ResultCode.ERROR_SERVICES);
         return Result.failed(ResultCode.ERROR_SERVICES); // 或者使用ResultCode

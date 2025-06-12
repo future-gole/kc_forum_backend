@@ -108,7 +108,7 @@ public class BoardServiceImpl implements IBoardService {
             log.warn("更新用户发帖数量失败, userId: {}", id);
             throw new BusinessException(ResultCode.FAILED_UPDATE_ARTICLE);
         }
-        log.info("板块：文章数量更新");
+        log.info("板块：{} 文章数量+1",id);
     }
 
 }

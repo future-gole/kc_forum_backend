@@ -38,6 +38,7 @@ public class ArticleReply {
     private Integer likeCount;
     private Byte state; // Use Byte for TINYINT
     private Byte deleteState; // Use Byte for TINYINT
+    private Integer childrenCount;// 子回复数量
     @JsonFormat(pattern = "yyyy-mm-dd")
     private LocalDateTime createTime;
     @JsonFormat(pattern = "yyyy-mm-dd")
