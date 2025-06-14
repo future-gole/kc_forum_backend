@@ -57,7 +57,7 @@ public class UserController {
     @Operation(summary = "用户注册")
     public Result register(@RequestBody @Validated
                         RegisterRequest registerRequest) {
-        log.info("用户注册：{}", registerRequest.getUserName());
+        log.info("用户开始注册：{}", registerRequest.getUserName());
         //确认两次密码是否相等
         if(!registerRequest.getPassword().equals(registerRequest.getRepeatPassword())) {
             log.warn(ResultCode.FAILED_TWO_PWD_NOT_SAME.toString());

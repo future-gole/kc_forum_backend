@@ -185,7 +185,7 @@ public class EmailServiceImpl implements IemailService {
         }
         //验证码正确，删除验证码
         redisTemplate.delete(key);
-
+        log.info("邮箱验证通过，email: {}", email);
         return true;
     }
 

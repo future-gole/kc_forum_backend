@@ -206,7 +206,8 @@ public class UserServiceImpl implements IUserService {
                 .eq(User::getDeleteState,0));
         //用户不存在
         if(user == null){
-            throw new BusinessException(ResultCode.FAILED_USER_NOT_EXISTS);
+            //使用 用户名或者密码不存在 防止被暴力猜测
+            throw new BusinessException(ResultCode.FAILED_LOGIN);
         }
         //用户密码错误
         if(!SecurityUtil.checkPassword(loginRequest.getPassword(), user.getPassword())){

@@ -2,24 +2,24 @@ spring:
   application:
     name: kc_forum
   datasource:
-    url: jdbc:mysql://127.0.0.1:3306/kc_forum? characterEncoding=utf8&useSSL=false
-    username: root
-    password: 161011zz
+    url: jdbc:mysql://127.0.0.1:3306/kc_forum?characterEncoding=utf8&useSSL=false
+    username: your_username
+    password: your_password
     driver-class-name: com.mysql.cj.jdbc.Driver
   jackson:
     date-format: yyyy-mm-dd HH:mm:ss #格式化日期
     default-property-inclusion: non_null #为null的时候不格式化
   mail:
-    host: smtp.qq.com
+    host: smtp.qq.com # 项目使用qq邮箱，如果需要更改修改这边
     port: 465
-    username: 1624475081@qq.com
-    password: gyfiybzapiamjfdf
+    username: your_username # qq 账号
+    password: your_password # smtp 申请的 密码
     protocol: smtp
     properties: # 下面要用properties的写法才可以生效
       mail.smtp.auth: true
       mail.smtp.ssl.enable: true  # 启用SSL
       mail.smtp.socketFactory.class: javax.net.ssl.SSLSocketFactory
-#      mail.debug: true  # 开启调试日志
+    #      mail.debug: true  # 开启调试日志
     default-encoding: utf-8
   data:
     redis:
@@ -37,18 +37,18 @@ logging:
     dateformat: yyyy-MM-dd HH:mm:ss
   level:
     root: info #日志默认级别
-#    com.doublez.kc_forum: debug #指定包下的日志级别
+  #    com.doublez.kc_forum: debug #指定包下的日志级别
   file:
     path: E:/log/kc_forum #日志保存路径
 
 upload:
   avatar-base-path: F:/upload # 头像存储的基础路径
-  avatar-base-url: http://localhost:58080/avatars # 头像访问的基础URL
-  base-path: F:/upload
-  base-url: http://localhost:58080
+  avatar-base-url: http://localhost:58080/avatars # 头像访问的基础URL，如果是服务器请将localhost改成对于的ip地址
+  base-path: F:/upload # 项目还没用到
+  base-url: http://localhost:58080  # 项目还没用到
 
 jwt:
-  secret: FzG6p48J80L6vFxLrQqy2JVN27NiYbgjtGuYCTpeX7w= # 你的密钥，确保足够复杂和保密
+  secret: your_jwt_secret # 你的密钥
   access-token:
     expiration-ms: 1800000 # Access Token 过期时间 (30分钟 = 30 * 60 * 1000)
   refresh-token:
@@ -58,8 +58,7 @@ jwt:
     # 如果 Access Token 剩余有效期小于等于此值，则尝试主动刷新
     # 设置为 0 或负数则禁用此功能
     threshold-ms: 300000
-
-
+# 下面是 自动生成api文档配置
 #springdoc:
 #  swagger-ui:
 #    path: /swagger-ui.html

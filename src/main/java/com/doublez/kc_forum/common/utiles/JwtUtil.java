@@ -1,19 +1,14 @@
 package com.doublez.kc_forum.common.utiles;
 
-import com.doublez.kc_forum.common.Result;
 import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.ApplicationException;
 import com.doublez.kc_forum.common.exception.BusinessException;
-import com.doublez.kc_forum.common.exception.SystemException;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.SignatureException;
-import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.security.Key;
@@ -24,25 +19,43 @@ import java.util.Objects;
 @Slf4j
 public class JwtUtil {
 
-//    // --- 用于接收注入值的实例字段 ---
-//    @Value("${jwt.secret}")
-//    private static String injectedSecret;
-//
-//    @Value("${jwt.access-token.expiration-ms}")
-//    private long injectedAccessTokenExpirationMs;
-//
-//    @Value("${jwt.refresh-token.expiration-ms}")
-//    private long injectedRefreshTokenExpirationMs;
+    // 静态字段，不再是 final，由外部初始化
+    private static String mySecret;
+    private static Integer tokenExpirationMs;
 
-    private static final String secret = "FzG6p48J80L6vFxLrQqy2JVN27NiYbgjtGuYCTpeX7w=";
-
-    private static final Key key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
-
-
-    private static final Integer expiration = 180000000;
+    private static Key key;
 
     public static final String USER_ID = "Id";
     public static final String EMAIL = "email";
+
+    /**
+     * 初始化 JwtUtil 的静态配置。
+     * 此方法应在应用程序启动时由 Spring Bean 调用。
+     *
+     * @param secret         JWT 密钥 (Base64 编码)
+     * @param expirationMs   Token 过期时间 (毫秒)
+     */
+    public static void init(String secret, Integer expirationMs) {
+        Objects.requireNonNull(secret, "JWT secret 未设置.");
+        Objects.requireNonNull(expirationMs, "JWT expiration 未设置.");
+
+        if (secret.trim().isEmpty()) {
+            log.error("JWT secret 为空. 初始化失败.");
+            throw new IllegalArgumentException("JWT secret 不能为空.");
+        }
+
+        mySecret = secret;
+        tokenExpirationMs = expirationMs;
+        try {
+            byte[] keyBytes = Decoders.BASE64.decode(mySecret);
+            key = Keys.hmacShaKeyFor(keyBytes);
+            log.info("JwtUtil 初始化成功. Expiration: {}ms", tokenExpirationMs);
+        } catch (IllegalArgumentException e) {
+            log.error("Failed to decode Base64 secret or create HMAC SHA key. Secret: [REDACTED]", e);
+            // 抛出运行时异常，阻止应用在JWT配置错误时继续运行
+            throw new IllegalStateException("Failed to initialize JwtUtil due to invalid secret key configuration.", e);
+        }
+    }
 
     /**
      * 生成token
@@ -53,7 +66,7 @@ public class JwtUtil {
         return  Jwts.builder()
                 .setClaims(map)
                 .setIssuedAt(new Date())//设置开始时间
-                .setExpiration(new Date(System.currentTimeMillis() + expiration))//设置过期时间
+                .setExpiration(new Date(System.currentTimeMillis() + tokenExpirationMs))//设置过期时间
                 .signWith(key)
                 .compact();
 
@@ -81,7 +94,7 @@ public class JwtUtil {
             return null;
         }
 
-        JwtParser parser = Jwts.parserBuilder().setSigningKey(secret).build(); // 使用静态 signingKey
+        JwtParser parser = Jwts.parserBuilder().setSigningKey(mySecret).build(); // 使用静态 signingKey
         try {
             return parser.parseClaimsJws(token).getBody();
         } catch (ExpiredJwtException e) {
