@@ -17,11 +17,11 @@ public class User {
     /**
      * CREATE TABLE user (
      *                         id BIGINT AUTO_INCREMENT PRIMARY KEY,
-     *                         user_name VARCHAR(50) NOT NULL UNIQUE COMMENT '登录账号',
+     *                         user_name VARCHAR(50) NOT NULL  COMMENT '用户姓名',
      *                         password VARCHAR(60) NOT NULL COMMENT 'BCrypt加密密码',
      *                         nick_name VARCHAR(50) NOT NULL COMMENT '显示名称',
      *                         phone VARCHAR(20),
-     *                         email VARCHAR(50),
+     *                         email VARCHAR(50) NOT NULL UNIQUE COMMENT '登录邮箱',
      *                         gender TINYINT DEFAULT 2 COMMENT '性别 0女 1男 2保密',
      *                         avatar_url VARCHAR(255) DEFAULT '/default_avatar.png' COMMENT '头像路径',
      *                         article_count BIGINT DEFAULT 0 COMMENT '发帖数量',
