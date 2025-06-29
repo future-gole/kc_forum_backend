@@ -87,7 +87,7 @@ src/main/java/com/doublez/kc_forum/
 
 1. **克隆项目**
 ```bash
-git clone <repository-url>
+git clone https://github.com/future-gole/kc_forum_backend.git
 cd kc_forum_backend
 ```
 
