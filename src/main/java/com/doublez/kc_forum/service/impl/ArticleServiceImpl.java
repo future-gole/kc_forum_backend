@@ -3,6 +3,8 @@ package com.doublez.kc_forum.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.doublez.kc_forum.common.ResultCode;
+import com.doublez.kc_forum.common.config.RabbitMQConfig;
+import com.doublez.kc_forum.common.event.ArticleViewEvent;
 import com.doublez.kc_forum.common.exception.BusinessException;
 import com.doublez.kc_forum.common.exception.SystemException;
 import com.doublez.kc_forum.common.pojo.request.UpdateArticleRequest;
@@ -23,6 +25,7 @@ import com.doublez.kc_forum.service.IUserService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -67,6 +70,9 @@ public class ArticleServiceImpl implements IArticleService {
 
     @Autowired
     private DBAsyncPopulationService dbAsync;
+
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
 
     // 定义Hash字段名称常量
     public static final String FIELD_ID = "id";
@@ -541,7 +547,10 @@ public class ArticleServiceImpl implements IArticleService {
         //异步增加redis访问数量
         redisAsync.incrVisit(articleDetailResponse.getId());
         //todo 异步增加数据库访问数量
-        dbAsync.updateArticleVisitCount(articleDetailResponse.getId());
+        // 发送浏览量更新事件到RabbitMQ
+        ArticleViewEvent event = new ArticleViewEvent(articleDetailResponse.getId(), System.currentTimeMillis());
+        rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.VIEW_ROUTING_KEY, event);
+        log.info("已发送浏览量更新事件到RabbitMQ: {}", event);
         //更新返回给前端的帖子访问次数
         articleDetailResponse.setVisitCount(articleDetailResponse.getVisitCount()+1);
 

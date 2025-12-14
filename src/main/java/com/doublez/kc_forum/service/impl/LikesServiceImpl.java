@@ -5,27 +5,22 @@ import com.doublez.kc_forum.common.ResultCode;
 import com.doublez.kc_forum.common.exception.BusinessException;
 import com.doublez.kc_forum.common.exception.SystemException;
 import com.doublez.kc_forum.common.utiles.RedisKeyUtil;
+import com.doublez.kc_forum.common.config.RabbitMQConfig;
+import com.doublez.kc_forum.common.event.ArticleLikeEvent;
 import com.doublez.kc_forum.mapper.LikesMapper;
 import com.doublez.kc_forum.model.Likes;
-import com.doublez.kc_forum.service.IArticleReplyService;
-import com.doublez.kc_forum.service.IArticleService;
 import com.doublez.kc_forum.service.ILikesService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.aop.framework.AopContext;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
-import org.springframework.data.redis.support.collections.DefaultRedisSet;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -35,7 +30,7 @@ public class LikesServiceImpl implements ILikesService {
     private final RedisScript<List> likeScript; // 假设List中是Long类型
     private final RedisScript<List> unlikeScript; // 假设List中是Long类型
     private final StringRedisTemplate stringRedisTemplate;
-    private final DBAsyncPopulationService dbAsync;
+    private final RabbitTemplate rabbitTemplate;
 
     // 文章/回复 Hash中likeCount字段的名称 (统一管理)
     private static final String LIKE_COUNT_FIELD = "likeCount";
@@ -51,12 +46,12 @@ public class LikesServiceImpl implements ILikesService {
                             @Qualifier("likeScript") RedisScript<List> likeScript, // 确保Bean名称正确
                             @Qualifier("unlikeScript") RedisScript<List> unlikeScript, // 确保Bean名称正确
                             LikesMapper likesMapper,
-                            DBAsyncPopulationService dbAsync) {
+                            RabbitTemplate rabbitTemplate) {
         this.stringRedisTemplate = stringRedisTemplate;
         this.likeScript = likeScript;
         this.unlikeScript = unlikeScript;
         this.likesMapper = likesMapper;
-        this.dbAsync = dbAsync;
+        this.rabbitTemplate = rabbitTemplate;
     }
 
     /**
@@ -169,14 +164,10 @@ public class LikesServiceImpl implements ILikesService {
         log.info("用户 {} 成功对目标进行 {} 操作 {}:{}",
                 userId, operation, targetType, targetId);
 
-        // 异步执行数据库持久化操作
-        dbAsync.persistLikeStateAsync(userId, targetId, targetType, isLikeOperation);
-        // 将数据库中的总点赞数更新为 Redis 中最新的计数值
-        if(isLikeOperation){
-            dbAsync.updateLikeCountInDb(targetId, targetType, 1);
-        }else {
-            dbAsync.updateLikeCountInDb(targetId, targetType, -1);
-        }
+        // 发送消息到RabbitMQ
+        ArticleLikeEvent event = new ArticleLikeEvent(userId, targetId, targetType, System.currentTimeMillis(), isLikeOperation);
+        rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.LIKE_ROUTING_KEY, event);
+        log.info("已发送点赞事件到RabbitMQ: {}", event);
     }
 
     /**

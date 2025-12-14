@@ -15,9 +15,9 @@ public class ApplicationException extends RuntimeException{
     private final Result<?> errResult;
 
     public ApplicationException(ResultCode resultCode) {
-        super(resultCode.getMessage()); // Set message for RuntimeException
+        super(resultCode.getMessage());
         this.resultCode = resultCode;
-        this.errResult = Result.failed(resultCode); // Construct Result from ResultCode
+        this.errResult = Result.failed(resultCode);
     }
 
     public ApplicationException(ResultCode resultCode, String customMessage) {
