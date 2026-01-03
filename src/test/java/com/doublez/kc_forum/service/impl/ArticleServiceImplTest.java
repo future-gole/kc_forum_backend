@@ -11,11 +11,17 @@ import com.doublez.kc_forum.common.utiles.RedisKeyUtil;
 import com.doublez.kc_forum.mapper.ArticleMapper;
 import com.doublez.kc_forum.model.Article;
 import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
+import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -24,18 +30,39 @@ import java.util.Map;
 
 import static com.doublez.kc_forum.service.impl.ArticleServiceImpl.FIELD_TITLE;
 import static com.doublez.kc_forum.service.impl.ArticleServiceImpl.FIELD_UPDATE_TIME;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 @Slf4j
-@SpringBootTest
+@SpringBootTest(properties = "spring.data.redis.repositories.enabled=false")
 class ArticleServiceImplTest {
     @Autowired
     ArticleServiceImpl articleService;
-    @Autowired
+    @MockBean
+    private RedisConnectionFactory redisConnectionFactory;
+
+    @MockBean
+    private ReactiveRedisConnectionFactory reactiveRedisConnectionFactory;
+    @MockBean(name = "redisTemplate")
     private RedisTemplate redisTemplate;
-    @Autowired
+    @MockBean(name = "stringRedisTemplate")
     private StringRedisTemplate stringRedisTemplate;
+    @MockBean
+    private HashOperations hashOperations;
+    @MockBean
+    private ZSetOperations zSetOperations;
+    @MockBean
+    private org.springframework.data.redis.core.ValueOperations valueOperations;
     @Autowired
     private ArticleMapper articleMapper;
+
+    @BeforeEach
+    void setUp() {
+        when(redisTemplate.opsForHash()).thenReturn(hashOperations);
+        when(stringRedisTemplate.opsForZSet()).thenReturn(zSetOperations);
+        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+    }
+
     @Test
     void createArticle() {
         Article article = new Article();
